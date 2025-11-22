@@ -91,7 +91,7 @@ def fetch_6g_news_with_gemini():
 가장 최근이고 영향력 있는 뉴스 위주로 선정해주세요."""
 
     # Gemini API 호출
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     headers = {
         "Content-Type": "application/json"
@@ -126,19 +126,54 @@ def fetch_6g_news_with_gemini():
         response.raise_for_status()
         
         data = response.json()
+        print(f"API 응답 구조: {json.dumps(data, indent=2)[:500]}")  # 디버깅용
         
-        # 응답에서 텍스트 추출
-        if 'candidates' in data and len(data['candidates']) > 0:
-            text = data['candidates'][0]['content']['parts'][0]['text']
-            
-            # JSON 파싱
-            clean_text = text.replace("```json", "").replace("```", "").strip()
-            results = json.loads(clean_text)
-            
-            print(f"✅ {len(results['top5'])}개 뉴스 분석 완료")
-            return results
-        else:
-            print("❌ Gemini API 응답 형식 오류")
+        # 응답에서 텍스트 추출 (안전하게)
+        try:
+            if 'candidates' in data and len(data['candidates']) > 0:
+                candidate = data['candidates'][0]
+                
+                # content 구조 확인
+                if 'content' in candidate:
+                    content = candidate['content']
+                    
+                    # parts가 있는 경우
+                    if 'parts' in content and len(content['parts']) > 0:
+                        text = content['parts'][0].get('text', '')
+                    # text가 직접 있는 경우
+                    elif 'text' in content:
+                        text = content['text']
+                    else:
+                        print(f"❌ 알 수 없는 content 구조: {content}")
+                        return create_summary_from_news(news_items[:5])
+                        
+                # output 또는 text 필드가 직접 있는 경우
+                elif 'output' in candidate:
+                    text = candidate['output']
+                elif 'text' in candidate:
+                    text = candidate['text']
+                else:
+                    print(f"❌ 알 수 없는 응답 구조: {candidate}")
+                    return create_summary_from_news(news_items[:5])
+                
+                if not text:
+                    print("❌ 빈 응답")
+                    return create_summary_from_news(news_items[:5])
+                
+                # JSON 파싱
+                clean_text = text.replace("```json", "").replace("```", "").strip()
+                results = json.loads(clean_text)
+                
+                print(f"✅ {len(results['top5'])}개 뉴스 분석 완료")
+                return results
+                
+            else:
+                print(f"❌ candidates 없음: {data}")
+                return create_summary_from_news(news_items[:5])
+                
+        except (KeyError, IndexError, TypeError) as e:
+            print(f"❌ 응답 파싱 오류: {e}")
+            print(f"응답 데이터: {data}")
             return create_summary_from_news(news_items[:5])
             
     except requests.exceptions.RequestException as e:
@@ -147,6 +182,7 @@ def fetch_6g_news_with_gemini():
         return create_summary_from_news(news_items[:5])
     except json.JSONDecodeError as e:
         print(f"❌ JSON 파싱 오류: {e}")
+        print(f"응답 텍스트: {text[:200] if 'text' in locals() else 'N/A'}")
         return create_summary_from_news(news_items[:5])
 
 def create_summary_from_news(news_items):
