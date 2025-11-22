@@ -63,32 +63,30 @@ def fetch_6g_news_with_gemini():
         print("⚠️ GEMINI_API_KEY가 설정되지 않았습니다. 웹 스크래핑 결과만 사용합니다.")
         return create_summary_from_news(news_items[:5])
     
-    # 뉴스 요약을 위한 프롬프트 생성
-    news_context = "\n\n".join([
-        f"제목: {item['title']}\n링크: {item['link']}\n날짜: {item['pub_date']}\n설명: {item['description']}"
-        for item in news_items
-    ])
+    # 뉴스 요약을 위한 간결한 프롬프트 생성 (토큰 절약)
+    news_list = []
+    for i, item in enumerate(news_items[:10], 1):  # 15개 → 10개로 줄임
+        news_list.append(f"{i}. {item['title']}\n링크: {item['link']}\n날짜: {item['pub_date']}")
     
-    prompt = f"""다음은 최신 6G 기술 관련 뉴스입니다. 이 중에서 가장 중요하고 영향력 있는 TOP 5 뉴스를 선정하고, 각각을 한국어로 요약해주세요.
+    news_context = "\n\n".join(news_list)
+    
+    prompt = f"""다음 6G 기술 뉴스 중 가장 중요한 TOP 5를 선정하고 한국어로 요약하세요.
 
-뉴스 목록:
 {news_context}
 
-다음 JSON 형식으로만 답변해주세요 (마크다운이나 백틱 없이):
+JSON 형식으로만 답변하세요 (백틱 없이):
 {{
   "top5": [
     {{
-      "title": "뉴스 제목 (영어 원문)",
-      "summary": "2-3문장의 한국어 요약",
-      "significance": "이 뉴스가 중요한 이유 (한국어)",
+      "title": "뉴스 제목",
+      "summary": "2-3문장 한국어 요약",
+      "significance": "중요한 이유",
       "date": "날짜",
-      "url": "원문 링크"
+      "url": "링크"
     }}
   ],
   "generatedAt": "{datetime.now().strftime('%Y-%m-%d')}"
-}}
-
-가장 최근이고 영향력 있는 뉴스 위주로 선정해주세요."""
+}}"""
 
     # Gemini API 호출
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
@@ -107,7 +105,7 @@ def fetch_6g_news_with_gemini():
             "temperature": 0.4,
             "topK": 40,
             "topP": 0.95,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 8192,  # 2048 → 8192로 증가
         }
     }
     
@@ -143,8 +141,13 @@ def fetch_6g_news_with_gemini():
                     # text가 직접 있는 경우
                     elif 'text' in content:
                         text = content['text']
+                    # role만 있고 내용이 없는 경우 (MAX_TOKENS 오류)
                     else:
-                        print(f"❌ 알 수 없는 content 구조: {content}")
+                        finish_reason = candidate.get('finishReason', 'UNKNOWN')
+                        print(f"❌ 응답 불완전 (finishReason: {finish_reason})")
+                        if finish_reason == 'MAX_TOKENS':
+                            print("⚠️ 토큰 제한 초과 - 프롬프트를 줄이거나 maxOutputTokens를 늘려야 합니다")
+                        print("⚠️ 웹 스크래핑 결과만 사용합니다.")
                         return create_summary_from_news(news_items[:5])
                         
                 # output 또는 text 필드가 직접 있는 경우
