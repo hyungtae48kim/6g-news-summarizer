@@ -354,8 +354,8 @@ npm run dev
 
 **Your Name**
 
-- GitHub: [@hyungtae48kim](https://github.com/hyungtae48kim)
-- Email: your.email@example.com
+- GitHub: [hyungtae48kim](https://github.com/hyungtae48kim)
+- Email: lonelykht@gmail.com
 
 ---
 
