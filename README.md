@@ -376,18 +376,6 @@ npm run dev
 - 이슈 생성: [GitHub Issues](https://github.com/your-username/6g-news-summarizer/issues)
 - 이메일: lonelykht@gmail.com
 
----
-
-## 📸 스크린샷
-
-### 웹 애플리케이션
-<img src="docs/screenshot-web.png" alt="Web App" width="600">
-
-### 이메일 뉴스레터
-<img src="docs/screenshot-email.png" alt="Email" width="600">
-
-### 텔레그램 알림
-<img src="docs/screenshot-telegram.png" alt="Telegram" width="400">
 
 ---
 
