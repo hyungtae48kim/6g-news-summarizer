@@ -50,15 +50,18 @@ def fetch_6g_news_with_gemini():
     """Google Gemini API를 사용하여 뉴스 분석 및 요약"""
     
     api_key = os.environ.get('GEMINI_API_KEY')
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
     
     # 6G 뉴스 검색
     news_items = search_google_news("6G technology 2025", num_results=15)
     
     if not news_items:
-        print("뉴스를 찾지 못했습니다. 기본 데이터를 사용합니다.")
-        return get_fallback_news()
+        print("뉴스를 찾지 못했습니다.")
+        return get_empty_news()
+    
+    # API 키가 없거나 비어있으면 웹 스크래핑 결과만 사용
+    if not api_key or api_key.strip() == '':
+        print("⚠️ GEMINI_API_KEY가 설정되지 않았습니다. 웹 스크래핑 결과만 사용합니다.")
+        return create_summary_from_news(news_items[:5])
     
     # 뉴스 요약을 위한 프롬프트 생성
     news_context = "\n\n".join([
@@ -87,8 +90,12 @@ def fetch_6g_news_with_gemini():
 
 가장 최근이고 영향력 있는 뉴스 위주로 선정해주세요."""
 
-    # Gemini API 호출 (v1beta 엔드포인트 사용)
+    # Gemini API 호출
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
     
     payload = {
         "contents": [{
@@ -107,7 +114,15 @@ def fetch_6g_news_with_gemini():
     print("Gemini API로 뉴스 분석 중...")
     
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        # API 키 오류 체크
+        if response.status_code == 400:
+            error_data = response.json()
+            print(f"❌ API 키 오류: {error_data}")
+            print("⚠️ 웹 스크래핑 결과만 사용합니다.")
+            return create_summary_from_news(news_items[:5])
+        
         response.raise_for_status()
         
         data = response.json()
@@ -123,33 +138,56 @@ def fetch_6g_news_with_gemini():
             print(f"✅ {len(results['top5'])}개 뉴스 분석 완료")
             return results
         else:
-            print("❌ Gemini API 응답 오류")
-            return get_fallback_news()
+            print("❌ Gemini API 응답 형식 오류")
+            return create_summary_from_news(news_items[:5])
             
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print(f"❌ Gemini API 오류: {e}")
-        return get_fallback_news()
+        print("⚠️ 웹 스크래핑 결과만 사용합니다.")
+        return create_summary_from_news(news_items[:5])
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON 파싱 오류: {e}")
+        return create_summary_from_news(news_items[:5])
 
-def get_fallback_news():
-    """API 실패 시 대체 뉴스 (웹 스크래핑만 사용)"""
+def create_summary_from_news(news_items):
+    """웹 스크래핑 결과로부터 직접 요약본 생성 (AI 없이)"""
     
-    news_items = search_google_news("6G technology news 2025", num_results=5)
+    print("웹 스크래핑 결과로 요약본 생성 중...")
     
     results = {
         "top5": [],
         "generatedAt": datetime.now().strftime('%Y-%m-%d')
     }
     
-    for item in news_items[:5]:
+    for i, item in enumerate(news_items[:5], 1):
+        # 설명이 너무 길면 자르기
+        description = item['description']
+        if len(description) > 250:
+            description = description[:250] + "..."
+        
         results["top5"].append({
             "title": item['title'],
-            "summary": item['description'][:200] + "..." if len(item['description']) > 200 else item['description'],
-            "significance": "최신 6G 기술 동향",
+            "summary": description,
+            "significance": f"6G 기술 발전의 최신 동향을 보여주는 {i}번째 주요 뉴스",
             "date": item['pub_date'],
             "url": item['link']
         })
     
+    print(f"✅ {len(results['top5'])}개 뉴스 요약 완료 (AI 요약 없음)")
     return results
+
+def get_empty_news():
+    """뉴스가 없을 때 기본 데이터"""
+    return {
+        "top5": [{
+            "title": "6G 뉴스를 찾을 수 없습니다",
+            "summary": "현재 6G 관련 최신 뉴스를 검색할 수 없습니다. 나중에 다시 시도해주세요.",
+            "significance": "시스템 오류",
+            "date": datetime.now().strftime('%Y-%m-%d'),
+            "url": "https://news.google.com"
+        }],
+        "generatedAt": datetime.now().strftime('%Y-%m-%d')
+    }
 
 def create_html_email(news_data):
     """HTML 형식의 이메일 생성"""
