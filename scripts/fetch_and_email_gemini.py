@@ -91,7 +91,7 @@ def fetch_6g_news_with_gemini():
 가장 최근이고 영향력 있는 뉴스 위주로 선정해주세요."""
 
     # Gemini API 호출
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     headers = {
         "Content-Type": "application/json"
