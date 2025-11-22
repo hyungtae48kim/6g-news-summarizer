@@ -433,6 +433,47 @@ def send_email(news_data):
     
     print("✅ 이메일 전송 완료")
 
+def send_telegram_message(news_data):
+    """텔레그램으로 6G 뉴스 전송"""
+    
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    
+    if not bot_token or not chat_id:
+        print("⚠️ 텔레그램 설정 없음. 전송 생략.")
+        return
+    
+    # 메시지 생성
+    message = f"*📡 6G 기술 뉴스 요약*\n_{news_data['generatedAt']}_\n━━━━━━━━━━━━━━\n\n"
+    
+    for i, news in enumerate(news_data['top5'], 1):
+        title = news['title'].replace('_', '\\_').replace('*', '\\*')
+        message += f"*{i}. {title}*\n\n"
+        
+        summary = news['summary'].replace('_', '\\_').replace('*', '\\*')
+        message += f"{summary}\n\n"
+        
+        if news.get('url'):
+            message += f"🔗 [원문 보기]({news['url']})\n\n"
+        
+        message += "━━━━━━━━━━━━━━\n\n"
+    
+    # 전송
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": False
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        print("✅ 텔레그램 전송 완료")
+    except Exception as e:
+        print(f"❌ 텔레그램 오류: {e}")
+
 def save_to_file(news_data):
     """결과를 파일로 저장"""
     
@@ -474,6 +515,9 @@ def main():
         
         # 3. 이메일 전송
         send_email(news_data)
+
+        # 4. 텔레그램 전송
+        send_telegram_message(news_data)
         
         print("\n" + "="*60)
         print("✅ 모든 작업 완료!")
