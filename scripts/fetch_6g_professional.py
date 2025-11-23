@@ -37,15 +37,25 @@ def search_ieee(query, num_results=5):
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
+
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        options.binary_location = '/usr/bin/chromium-browser'
+
     driver = None
     
     try:
-        # Chrome WebDriver 시작 (자동 설치)
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=options
-        )
+        # 🆕 GitHub Actions용 ChromeDriver 경로
+        if os.environ.get('GITHUB_ACTIONS') == 'true':
+            from selenium.webdriver.chrome.service import Service
+            service = Service('/usr/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            # 로컬 환경
+            from webdriver_manager.chrome import ChromeDriverManager
+            driver = webdriver.Chrome(
+                service=Service(ChromeDriverManager().install()),
+                options=options
+            )
         
         # Google을 통한 IEEE 논문 검색
         search_query = query.replace(' ', '+')
