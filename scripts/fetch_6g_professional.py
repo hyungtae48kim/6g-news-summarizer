@@ -501,7 +501,6 @@ def create_html_email(summary_data):
 - 아이콘 활용
 - 읽기 쉬운 레이아웃
 """
-
 def create_visual_html_email(summary_data):
     """시각적으로 개선된 HTML 이메일 생성"""
     
@@ -938,6 +937,7 @@ def create_visual_html_email(summary_data):
     """
     
     return html
+
 
 
 # 기존 fetch_6g_professional.py의 send_email 함수를 이것으로 교체
