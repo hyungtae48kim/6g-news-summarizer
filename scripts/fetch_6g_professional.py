@@ -19,7 +19,6 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
-from urllib.parse import unquote
 
 
 def search_ieee(query, num_results=5):
