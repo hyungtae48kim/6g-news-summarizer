@@ -180,12 +180,17 @@ def summarize_with_gemini(items):
         print("⚠️ GEMINI_API_KEY 없음. AI 요약 생략.")
         return create_summary_without_ai(items)
     
-    # 아이템 정보 구성
+    # 아이템 정보 구성 (특수문자 이스케이프)
     items_context = ""
     for i, item in enumerate(items, 1):
-        items_context += f"\n{i}. [{item['type']}] {item['title']}\n"
-        items_context += f"설명: {item['description'][:200]}\n"
-        items_context += f"링크: {item['url']}\n"
+        # 특수문자 제거 및 이스케이프
+        title = item['title'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:200]
+        description = item['description'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:300]
+        url = item['url'].replace('"', '\\"').strip()
+        
+        items_context += f"\n{i}. [{item['type']}] {title}\n"
+        items_context += f"Description: {description}\n"
+        items_context += f"Link: {url}\n"
     
     prompt = f"""당신은 6G 기술을 연구하는 전문 엔지니어입니다.
 
@@ -194,23 +199,22 @@ def summarize_with_gemini(items):
 자료 목록:
 {items_context}
 
-각 자료에 대해 다음 형식으로 요약하세요:
+각 자료에 대해 다음 형식으로 요약하세요. 반드시 JSON 형식만 반환하고 다른 텍스트는 포함하지 마세요:
 
 {{
   "summaries": [
     {{
-      "title": "논문/저널/뉴스 제목",
+      "title": "논문 또는 저널 또는 뉴스 제목",
       "summary": "핵심 내용을 3-4문장으로 요약 (한국어)",
       "message": "이 자료가 6G 엔지니어에게 주는 핵심 메시지와 실무적 시사점 (한국어)",
       "url": "원문 링크",
-      "type": "Journal/Paper/News"
+      "type": "Journal 또는 Paper 또는 News"
     }}
   ],
   "generatedAt": "{datetime.now().strftime('%Y-%m-%d')}"
 }}
 
-엔지니어 관점에서 기술적 통찰과 실무 적용 가능성을 중심으로 분석하세요.
-JSON 형식만 반환하고 다른 텍스트는 포함하지 마세요."""
+엔지니어 관점에서 기술적 통찰과 실무 적용 가능성을 중심으로 분석하세요."""
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
@@ -241,14 +245,25 @@ JSON 형식만 반환하고 다른 텍스트는 포함하지 마세요."""
                 
                 # JSON 파싱
                 clean_text = text.replace("```json", "").replace("```", "").strip()
-                results = json.loads(clean_text)
                 
-                print(f"✅ {len(results['summaries'])}개 요약 완료")
-                return results
+                # 파싱 전 디버깅
+                print(f"응답 텍스트 길이: {len(clean_text)}")
+                
+                try:
+                    results = json.loads(clean_text)
+                    print(f"✅ {len(results['summaries'])}개 요약 완료")
+                    return results
+                except json.JSONDecodeError as e:
+                    print(f"❌ JSON 파싱 오류: {e}")
+                    print(f"응답 미리보기: {clean_text[:500]}")
+                    return create_summary_without_ai(items)
         
         print("⚠️ AI 요약 실패. 기본 요약 사용.")
         return create_summary_without_ai(items)
         
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Gemini API 오류: {e}")
+        return create_summary_without_ai(items)
     except Exception as e:
         print(f"❌ Gemini API 오류: {e}")
         return create_summary_without_ai(items)
