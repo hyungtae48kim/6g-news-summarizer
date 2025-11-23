@@ -12,54 +12,312 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+import re
 
-# ==================== 검색 함수 ====================
 
-def search_google_scholar(query, num_results=5):
-    """Google Scholar에서 6G 논문 검색 (Papers)"""
+def search_ieee(query, num_results=5):
+    """IEEE Xplore 검색 (Journals) - Selenium 사용"""
     
-    print(f"📚 Google Scholar 검색 중: {query}")
+    print(f"📰 IEEE Xplore 검색 중: {query}")
     
-    # Google Scholar RSS/API 대안으로 일반 검색 사용
-    search_url = f"https://scholar.google.com/scholar?q={query}&hl=en&as_sdt=0,5"
+    # Chrome 옵션 설정
+    options = Options()
+    options.add_argument('--headless')  # 백그라운드 실행
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
+    driver = None
     
     try:
-        response = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Chrome WebDriver 시작 (자동 설치)
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=options
+        )
+        
+        # Google을 통한 IEEE 논문 검색
+        search_query = query.replace(' ', '+')
+        search_url = f"https://www.google.com/search?q=site:ieeexplore.ieee.org+{search_query}"
+        
+        driver.get(search_url)
+        
+        # 페이지 로딩 대기 (CAPTCHA 회피)
+        time.sleep(3)
         
         results = []
-        papers = soup.find_all('div', class_='gs_ri', limit=num_results)
         
-        for paper in papers:
-            title_elem = paper.find('h3', class_='gs_rt')
-            snippet_elem = paper.find('div', class_='gs_rs')
+        # 여러 가능한 CSS 선택자 시도 (Google 구조 변경 대응)
+        selectors = [
+            'div.g',                          # 기존 구조
+            'div[data-sokoban-container]',    # 최신 구조 1
+            'div.MjjYud',                     # 최신 구조 2
+            'div.Gx5Zad'                      # 대체 구조
+        ]
+        
+        search_results = []
+        used_selector = None
+        
+        for selector in selectors:
+            try:
+                search_results = driver.find_elements(By.CSS_SELECTOR, selector)
+                if len(search_results) > 0:
+                    used_selector = selector
+                    print(f"  ✓ 선택자 '{selector}' 사용: {len(search_results)}개 발견")
+                    break
+            except Exception as e:
+                continue
+        
+        if not search_results:
+            print("  ⚠️ 검색 결과를 찾을 수 없습니다")
+        
+        # 결과 파싱
+        parsed_count = 0
+        for result in search_results:
+            if len(results) >= num_results:
+                break
             
-            if title_elem:
-                # 제목에서 링크 추출
-                link_elem = title_elem.find('a')
-                title = title_elem.get_text()
-                url = link_elem['href'] if link_elem and link_elem.has_attr('href') else ''
+            try:
+                # 제목 추출 (h3, h2 태그 시도)
+                title_elem = None
+                title = None
                 
-                # 초록 추출
-                snippet = snippet_elem.get_text() if snippet_elem else ''
+                for tag in ['h3', 'h2', 'h1']:
+                    try:
+                        title_elem = result.find_element(By.TAG_NAME, tag)
+                        if title_elem and title_elem.text.strip():
+                            title = title_elem.text.strip()
+                            break
+                    except:
+                        continue
                 
-                results.append({
-                    'title': title.strip(),
-                    'description': snippet.strip(),
-                    'url': url,
-                    'type': 'Paper'
-                })
+                # 링크 추출
+                url = None
+                try:
+                    link_elem = result.find_element(By.TAG_NAME, 'a')
+                    url = link_elem.get_attribute('href')
+                    
+                    # Google 리디렉션 URL 정제
+                    if url and '/url?q=' in url:
+                        match = re.search(r'/url\?q=(.*?)&', url)
+                        if match:
+                            url = match.group(1)
+                    
+                    # URL 디코딩
+                    if url:
+                        from urllib.parse import unquote
+                        url = unquote(url)
+                        
+                except:
+                    pass
+                
+                # IEEE URL 및 제목 검증
+                if url and 'ieeexplore.ieee.org' in url and title:
+                    # 설명/요약 추출 (선택적)
+                    description = title
+                    try:
+                        # 여러 가능한 설명 요소 시도
+                        snippet_selectors = [
+                            'div.VwiC3b',
+                            'span.aCOpRe',
+                            'div.IsZvec',
+                            'div.s'
+                        ]
+                        
+                        for snippet_sel in snippet_selectors:
+                            try:
+                                snippet_elem = result.find_element(By.CSS_SELECTOR, snippet_sel)
+                                if snippet_elem and snippet_elem.text.strip():
+                                    description = snippet_elem.text.strip()
+                                    break
+                            except:
+                                continue
+                    except:
+                        pass
+                    
+                    results.append({
+                        'title': title,
+                        'description': description,
+                        'url': url,
+                        'type': 'Journal'
+                    })
+                    
+                    parsed_count += 1
+                    
+            except Exception as e:
+                # 개별 결과 파싱 실패는 무시
+                continue
         
-        print(f"✅ {len(results)}개 논문 발견")
+        print(f"  📊 파싱 성공: {parsed_count}개")
+        
+        # 결과가 부족하면 Google Scholar 추가 검색
+        if len(results) < num_results:
+            print(f"⚠️ IEEE 결과 부족 ({len(results)}개), Google Scholar에서 추가 검색...")
+            try:
+                scholar_results = search_google_scholar(f"{query} IEEE", num_results - len(results))
+                results.extend(scholar_results)
+            except Exception as e:
+                print(f"  ⚠️ Google Scholar 추가 검색 실패: {e}")
+        
+        print(f"✅ {len(results)}개 저널 발견")
         return results
         
     except Exception as e:
+        print(f"❌ IEEE 검색 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 대체: Google Scholar에서 IEEE 논문 검색
+        print("⚠️ Google Scholar로 대체 검색...")
+        try:
+            return search_google_scholar(f"{query} IEEE journal", num_results)
+        except:
+            return []
+        
+    finally:
+        # 드라이버 종료 (리소스 정리)
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
+
+
+def search_google_scholar(query, num_results=5):
+    """
+    Google Scholar 검색 - Selenium 버전
+    기존 scholarly 라이브러리 대신 사용 가능
+    """
+    
+    print(f"📚 Google Scholar 검색 중: {query}")
+    
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument('--disable-gpu')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
+    driver = None
+    
+    try:
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=options
+        )
+        
+        # Google Scholar 검색
+        search_query = query.replace(' ', '+')
+        search_url = f"https://scholar.google.com/scholar?q={search_query}&hl=en"
+        
+        driver.get(search_url)
+        
+        # 페이지 로딩 대기
+        time.sleep(3)
+        
+        # CAPTCHA 확인
+        page_source = driver.page_source.lower()
+        if "unusual traffic" in page_source or "captcha" in page_source:
+            print("  ⚠️ Google Scholar CAPTCHA 감지됨 - 결과 제한될 수 있음")
+            # CAPTCHA가 있어도 일부 결과는 파싱 시도
+        
+        results = []
+        
+        # Google Scholar 검색 결과 파싱
+        try:
+            # 검색 결과 컨테이너
+            search_results = driver.find_elements(By.CSS_SELECTOR, 'div.gs_ri')
+            
+            print(f"  📊 Scholar 결과 발견: {len(search_results)}개")
+            
+            for result in search_results[:num_results * 2]:  # 여유있게 가져오기
+                if len(results) >= num_results:
+                    break
+                
+                try:
+                    # 제목
+                    title = None
+                    url = None
+                    
+                    try:
+                        title_elem = result.find_element(By.CSS_SELECTOR, 'h3.gs_rt')
+                        title = title_elem.text.strip()
+                        
+                        # URL 추출
+                        try:
+                            link = title_elem.find_element(By.TAG_NAME, 'a')
+                            url = link.get_attribute('href')
+                        except:
+                            pass
+                    except:
+                        continue
+                    
+                    if not title:
+                        continue
+                    
+                    # 설명/초록
+                    description = title
+                    try:
+                        desc_elem = result.find_element(By.CSS_SELECTOR, 'div.gs_rs')
+                        if desc_elem and desc_elem.text.strip():
+                            description = desc_elem.text.strip()
+                    except:
+                        pass
+                    
+                    # 저자 정보
+                    authors = ""
+                    try:
+                        authors_elem = result.find_element(By.CSS_SELECTOR, 'div.gs_a')
+                        if authors_elem:
+                            authors = authors_elem.text.strip()
+                    except:
+                        pass
+                    
+                    results.append({
+                        'title': title,
+                        'description': description,
+                        'url': url if url else '',
+                        'type': 'Journal',
+                        'authors': authors
+                    })
+                    
+                except Exception as e:
+                    continue
+            
+            print(f"✅ {len(results)}개 논문 발견")
+            return results
+            
+        except Exception as e:
+            print(f"  ❌ Scholar 파싱 오류: {e}")
+            return []
+        
+    except Exception as e:
         print(f"❌ Google Scholar 검색 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return []
+        
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
+
 
 def search_arxiv(query, num_results=5):
     """arXiv에서 6G 논문 검색 (Papers)"""
@@ -101,65 +359,6 @@ def search_arxiv(query, num_results=5):
         print(f"❌ arXiv 검색 오류: {e}")
         return []
 
-def search_ieee(query, num_results=5):
-    """IEEE Xplore 검색 (Journals) - 실제 검색 구현"""
-    
-    print(f"📰 IEEE Xplore 검색 중: {query}")
-    
-    # Google을 통한 IEEE 논문 검색
-    search_url = f"https://www.google.com/search?q=site:ieeexplore.ieee.org+{query.replace(' ', '+')}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    
-    try:
-        response = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        results = []
-        
-        # Google 검색 결과에서 IEEE 링크 추출
-        search_results = soup.find_all('div', class_='g', limit=num_results * 2)
-        
-        for result in search_results:
-            if len(results) >= num_results:
-                break
-                
-            # 제목과 링크 추출
-            title_elem = result.find('h3')
-            link_elem = result.find('a')
-            snippet_elem = result.find('div', class_='VwiC3b')
-            
-            if title_elem and link_elem:
-                title = title_elem.get_text().strip()
-                url = link_elem.get('href', '')
-                
-                # IEEE URL만 필터링
-                if 'ieeexplore.ieee.org' in url:
-                    snippet = snippet_elem.get_text().strip() if snippet_elem else title
-                    
-                    results.append({
-                        'title': title,
-                        'description': snippet,
-                        'url': url,
-                        'type': 'Journal'
-                    })
-        
-        # 결과가 부족하면 Google Scholar 추가 검색
-        if len(results) < num_results:
-            print(f"⚠️ IEEE 결과 부족 ({len(results)}개), Google Scholar에서 추가 검색...")
-            scholar_results = search_google_scholar(f"{query} IEEE", num_results - len(results))
-            results.extend(scholar_results)
-        
-        print(f"✅ {len(results)}개 저널 발견")
-        return results
-        
-    except Exception as e:
-        print(f"❌ IEEE 검색 오류: {e}")
-        # 대체: Google Scholar에서 IEEE 논문 검색
-        print("⚠️ Google Scholar로 대체 검색...")
-        return search_google_scholar(f"{query} IEEE journal", num_results)
 
 def search_google_news(query, num_results=5):
     """Google 뉴스 검색 (News)"""
