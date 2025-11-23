@@ -639,6 +639,7 @@ def create_visual_html_email(summary_data):
             /* 컨텐츠 영역 */
             .content {{
                 padding: 30px;
+                background-color: #f9fafb;
             }}
             
             /* 섹션 헤더 */
@@ -677,7 +678,8 @@ def create_visual_html_email(summary_data):
                 border-radius: 12px;
                 padding: 24px;
                 margin-bottom: 20px;
-                border: 1px solid #e5e7eb;
+                border: 2px solid #e5e7eb;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
                 transition: all 0.3s ease;
                 position: relative;
                 overflow: hidden;
@@ -688,12 +690,13 @@ def create_visual_html_email(summary_data):
                 left: 0;
                 top: 0;
                 bottom: 0;
-                width: 4px;
+                width: 5px;
                 background: var(--card-color);
             }}
             .card:hover {{
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-                transform: translateY(-2px);
+                box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+                transform: translateY(-4px);
+                border-color: var(--card-color);
             }}
             
             /* 타입 배지 */
