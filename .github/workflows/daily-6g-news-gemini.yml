@@ -1,9 +1,9 @@
 name: Daily 6G News Summary (Gemini Free)
 
 on:
-  schedule:
-    # 매일 오전 9시 (한국시간 기준 UTC+9, 즉 UTC 00:00)
-    - cron: '0 0 * * *'
+#  schedule:
+#    # 매일 오전 9시 (한국시간 기준 UTC+9, 즉 UTC 00:00)
+#    - cron: '0 0 * * *'
   workflow_dispatch: # 수동 실행 가능
 
 jobs:
