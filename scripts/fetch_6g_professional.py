@@ -493,9 +493,453 @@ def create_html_email(summary_data):
     
     return html
 
-def send_email(summary_data):
-    """이메일 전송"""
+#!/usr/bin/env python3
+"""
+시각적으로 개선된 이메일 템플릿
+- 카드 스타일 디자인
+- 컬러 코딩 (Journal: 파랑, Paper: 초록, News: 주황)
+- 아이콘 활용
+- 읽기 쉬운 레이아웃
+"""
+
+def create_visual_html_email(summary_data):
+    """시각적으로 개선된 HTML 이메일 생성"""
     
+    # 타입별 색상 및 아이콘 정의
+    type_config = {
+        'Journal': {
+            'color': '#3b82f6',
+            'bg_color': '#eff6ff',
+            'icon': '📚',
+            'label': 'Academic Journal'
+        },
+        'Paper': {
+            'color': '#10b981',
+            'bg_color': '#f0fdf4',
+            'icon': '📄',
+            'label': 'Research Paper'
+        },
+        'News': {
+            'color': '#f59e0b',
+            'bg_color': '#fffbeb',
+            'icon': '📰',
+            'label': 'Industry News'
+        }
+    }
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+            }}
+            .email-container {{
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }}
+            
+            /* 헤더 */
+            .header {{
+                background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+                color: white;
+                padding: 40px 30px;
+                text-align: center;
+                position: relative;
+                overflow: hidden;
+            }}
+            .header::before {{
+                content: '';
+                position: absolute;
+                top: -50%;
+                right: -10%;
+                width: 200px;
+                height: 200px;
+                background: rgba(255,255,255,0.1);
+                border-radius: 50%;
+            }}
+            .header::after {{
+                content: '';
+                position: absolute;
+                bottom: -30%;
+                left: -5%;
+                width: 150px;
+                height: 150px;
+                background: rgba(255,255,255,0.08);
+                border-radius: 50%;
+            }}
+            .header-content {{
+                position: relative;
+                z-index: 1;
+            }}
+            .header h1 {{
+                font-size: 32px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .header-subtitle {{
+                font-size: 16px;
+                opacity: 0.9;
+                font-weight: 300;
+            }}
+            .header-date {{
+                display: inline-block;
+                background: rgba(255,255,255,0.2);
+                padding: 8px 20px;
+                border-radius: 20px;
+                margin-top: 16px;
+                font-size: 14px;
+                backdrop-filter: blur(10px);
+            }}
+            
+            /* 통계 요약 */
+            .stats {{
+                display: flex;
+                justify-content: space-around;
+                padding: 30px;
+                background: linear-gradient(to bottom, #f9fafb, white);
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            .stat-item {{
+                text-align: center;
+                padding: 0 20px;
+            }}
+            .stat-number {{
+                font-size: 36px;
+                font-weight: 700;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }}
+            .stat-label {{
+                font-size: 13px;
+                color: #6b7280;
+                margin-top: 4px;
+                font-weight: 500;
+            }}
+            
+            /* 컨텐츠 영역 */
+            .content {{
+                padding: 30px;
+            }}
+            
+            /* 섹션 헤더 */
+            .section-header {{
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin: 40px 0 24px 0;
+                padding-bottom: 12px;
+                border-bottom: 3px solid #e5e7eb;
+            }}
+            .section-header:first-child {{
+                margin-top: 0;
+            }}
+            .section-icon {{
+                font-size: 28px;
+            }}
+            .section-title {{
+                font-size: 22px;
+                font-weight: 700;
+                color: #1f2937;
+            }}
+            .section-count {{
+                margin-left: auto;
+                background: #f3f4f6;
+                color: #6b7280;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            
+            /* 카드 스타일 */
+            .card {{
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 20px;
+                border: 1px solid #e5e7eb;
+                transition: all 0.3s ease;
+                position: relative;
+                overflow: hidden;
+            }}
+            .card::before {{
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 4px;
+                background: var(--card-color);
+            }}
+            .card:hover {{
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                transform: translateY(-2px);
+            }}
+            
+            /* 타입 배지 */
+            .type-badge {{
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 12px;
+                background: var(--badge-bg);
+                color: var(--badge-color);
+            }}
+            
+            /* 카드 제목 */
+            .card-title {{
+                font-size: 20px;
+                font-weight: 700;
+                color: #1f2937;
+                margin-bottom: 16px;
+                line-height: 1.4;
+            }}
+            .card-title a {{
+                color: inherit;
+                text-decoration: none;
+                transition: color 0.2s;
+            }}
+            .card-title a:hover {{
+                color: var(--card-color);
+            }}
+            
+            /* 카드 내용 */
+            .card-summary {{
+                color: #4b5563;
+                font-size: 15px;
+                line-height: 1.7;
+                margin-bottom: 16px;
+                padding: 16px;
+                background: #f9fafb;
+                border-radius: 8px;
+                border-left: 3px solid var(--card-color);
+            }}
+            
+            /* 인사이트 박스 */
+            .insight-box {{
+                background: var(--badge-bg);
+                border-radius: 8px;
+                padding: 16px;
+                margin-top: 16px;
+                border-left: 3px solid var(--card-color);
+            }}
+            .insight-label {{
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-weight: 700;
+                color: var(--card-color);
+                font-size: 14px;
+                margin-bottom: 8px;
+            }}
+            .insight-text {{
+                color: #374151;
+                font-size: 14px;
+                line-height: 1.6;
+            }}
+            
+            /* 링크 버튼 */
+            .card-link {{
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 16px;
+                padding: 10px 20px;
+                background: var(--card-color);
+                color: white;
+                text-decoration: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                transition: all 0.2s;
+            }}
+            .card-link:hover {{
+                transform: translateX(4px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }}
+            
+            /* 푸터 */
+            .footer {{
+                background: #f9fafb;
+                padding: 30px;
+                text-align: center;
+                border-top: 1px solid #e5e7eb;
+            }}
+            .footer-text {{
+                color: #6b7280;
+                font-size: 13px;
+                margin-bottom: 8px;
+            }}
+            .footer-logo {{
+                font-size: 24px;
+                margin-top: 12px;
+            }}
+            
+            /* 반응형 */
+            @media (max-width: 600px) {{
+                .header h1 {{
+                    font-size: 24px;
+                }}
+                .stats {{
+                    flex-direction: column;
+                    gap: 20px;
+                }}
+                .stat-item {{
+                    padding: 0;
+                }}
+                .content {{
+                    padding: 20px;
+                }}
+                .card {{
+                    padding: 16px;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <!-- 헤더 -->
+            <div class="header">
+                <div class="header-content">
+                    <h1>🔬 6G Technology Intelligence</h1>
+                    <div class="header-subtitle">Professional Research Report for Engineers</div>
+                    <div class="header-date">📅 {summary_data['generatedAt']}</div>
+                </div>
+            </div>
+            
+            <!-- 통계 요약 -->
+            <div class="stats">
+    """
+    
+    # 타입별 개수 계산
+    type_counts = {'Journal': 0, 'Paper': 0, 'News': 0}
+    for item in summary_data['summaries']:
+        item_type = item.get('type', 'News')
+        type_counts[item_type] = type_counts.get(item_type, 0) + 1
+    
+    html += f"""
+                <div class="stat-item">
+                    <div class="stat-number">{type_counts.get('Journal', 0)}</div>
+                    <div class="stat-label">📚 Journals</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{type_counts.get('Paper', 0)}</div>
+                    <div class="stat-label">📄 Papers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{type_counts.get('News', 0)}</div>
+                    <div class="stat-label">📰 News</div>
+                </div>
+            </div>
+            
+            <!-- 컨텐츠 -->
+            <div class="content">
+    """
+    
+    # 타입별로 그룹핑
+    groups = {'Journal': [], 'Paper': [], 'News': []}
+    for item in summary_data['summaries']:
+        item_type = item.get('type', 'News')
+        groups[item_type].append(item)
+    
+    # 각 섹션 렌더링
+    section_titles = {
+        'Journal': '📚 Academic Journals',
+        'Paper': '📄 Research Papers',
+        'News': '📰 Industry News'
+    }
+    
+    for section_type, items in groups.items():
+        if not items:
+            continue
+            
+        config = type_config[section_type]
+        
+        html += f"""
+                <div class="section-header">
+                    <span class="section-icon">{config['icon']}</span>
+                    <span class="section-title">{section_titles[section_type]}</span>
+                    <span class="section-count">{len(items)} items</span>
+                </div>
+        """
+        
+        for item in items:
+            html += f"""
+                <div class="card" style="--card-color: {config['color']}; --badge-bg: {config['bg_color']}; --badge-color: {config['color']};">
+                    <div class="type-badge">
+                        <span>{config['icon']}</span>
+                        <span>{config['label']}</span>
+                    </div>
+                    
+                    <div class="card-title">
+                        <a href="{item['url']}" target="_blank">{item['title']}</a>
+                    </div>
+                    
+                    <div class="card-summary">
+                        {item['summary']}
+                    </div>
+                    
+                    <div class="insight-box">
+                        <div class="insight-label">
+                            <span>💡</span>
+                            <span>Engineer's Insight</span>
+                        </div>
+                        <div class="insight-text">
+                            {item['message']}
+                        </div>
+                    </div>
+                    
+                    <a href="{item['url']}" class="card-link" target="_blank">
+                        <span>Read Full Article</span>
+                        <span>→</span>
+                    </a>
+                </div>
+            """
+    
+    html += """
+            </div>
+            
+            <!-- 푸터 -->
+            <div class="footer">
+                <div class="footer-text">🤖 Automated by GitHub Actions</div>
+                <div class="footer-text">Powered by Google Gemini AI</div>
+                <div class="footer-logo">🔬 6G Intelligence System</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+
+# 기존 fetch_6g_professional.py의 send_email 함수를 이것으로 교체
+def send_email(summary_data):
+    """시각적으로 개선된 이메일 전송"""
     gmail_user = os.environ.get('GMAIL_USER')
     gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
     recipient = os.environ.get('RECIPIENT_EMAIL')
@@ -505,15 +949,16 @@ def send_email(summary_data):
         return
     
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = f'🔬 6G Technology Report - {summary_data["generatedAt"]}'
+    msg['Subject'] = f'🔬 6G Technology Intelligence Report - {summary_data["generatedAt"]}'
     msg['From'] = gmail_user
     msg['To'] = recipient
     
-    html_body = create_html_email(summary_data)
+    # 새로운 시각적 HTML 사용
+    html_body = create_visual_html_email(summary_data)
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
     
     try:
-        print("📧 이메일 전송 중...")
+        print("📧 시각적으로 개선된 이메일 전송 중...")
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(gmail_user, gmail_password)
             server.send_message(msg)
@@ -521,10 +966,21 @@ def send_email(summary_data):
     except Exception as e:
         print(f"❌ 이메일 전송 오류: {e}")
 
-# ==================== 텔레그램 전송 ====================
 
-def send_telegram_message(summary_data):
-    """텔레그램 전송 (Markdown 포맷)"""
+# ==================== 텔레그램 전송 ====================
+#!/usr/bin/env python3
+"""
+시각적으로 개선된 텔레그램 메시지
+- 이모지 활용
+- 명확한 구조
+- 읽기 쉬운 포맷
+"""
+
+def send_visual_telegram(summary_data):
+    """시각적으로 개선된 텔레그램 메시지 전송"""
+    
+    import requests
+    import os
     
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
@@ -533,75 +989,102 @@ def send_telegram_message(summary_data):
         print("⚠️ 텔레그램 설정 없음. 전송 생략.")
         return
     
-    # 메시지 생성
-    message = f"*🔬 6G Technology Intelligence Report*\n"
-    message += f"_{summary_data['generatedAt']}_\n"
-    message += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    # 타입별로 그룹핑
+    # 타입별 그룹핑
     groups = {'Journal': [], 'Paper': [], 'News': []}
     for item in summary_data['summaries']:
         item_type = item.get('type', 'News')
         groups[item_type].append(item)
     
+    # 헤더 메시지
+    message = "🔬 *6G Technology Intelligence Report*\n"
+    message += f"📅 _{summary_data['generatedAt']}_\n\n"
+    
+    # 통계 요약
+    message += "📊 *Quick Summary*\n"
+    message += f"├─ 📚 Journals: {len(groups['Journal'])}\n"
+    message += f"├─ 📄 Papers: {len(groups['Paper'])}\n"
+    message += f"└─ 📰 News: {len(groups['News'])}\n\n"
+    message += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    
     # Journal 섹션
     if groups['Journal']:
-        message += "*📚 Academic Journals*\n\n"
+        message += "📚 *ACADEMIC JOURNALS*\n\n"
         for i, item in enumerate(groups['Journal'], 1):
-            title = item['title'].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title[:80]}*\n\n"
-            summary = item['summary'][:150].replace('_', '\\_').replace('*', '\\*')
-            message += f"{summary}\\.\\.\\.\n\n"
-            msg_text = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
-            message += f"💡 _{msg_text}_\n\n"
+            # 제목
+            title = item['title'][:80].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
+            message += f"*{i}\\. {title}*\n\n"
+            
+            # 요약 (짧게)
+            summary = item['summary'][:120].replace('_', '\\_').replace('*', '\\*')
+            message += f"📝 {summary}\\.\\.\\.\n\n"
+            
+            # 인사이트
+            insight = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
+            message += f"💡 _{insight}_\n\n"
+            
+            # 링크
             if item.get('url'):
                 message += f"🔗 [Read Full Article]({item['url']})\n\n"
-            message += "━━━━━━━━━━━━━━\n\n"
+            
+            message += "─────────────\n\n"
     
     # Paper 섹션
     if groups['Paper']:
-        message += "*📄 Research Papers*\n\n"
+        message += "📄 *RESEARCH PAPERS*\n\n"
         for i, item in enumerate(groups['Paper'], 1):
-            title = item['title'].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title[:80]}*\n\n"
-            summary = item['summary'][:150].replace('_', '\\_').replace('*', '\\*')
-            message += f"{summary}\\.\\.\\.\n\n"
-            msg_text = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
-            message += f"💡 _{msg_text}_\n\n"
+            title = item['title'][:80].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
+            message += f"*{i}\\. {title}*\n\n"
+            
+            summary = item['summary'][:120].replace('_', '\\_').replace('*', '\\*')
+            message += f"📝 {summary}\\.\\.\\.\n\n"
+            
+            insight = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
+            message += f"💡 _{insight}_\n\n"
+            
             if item.get('url'):
                 message += f"🔗 [Read Paper]({item['url']})\n\n"
-            message += "━━━━━━━━━━━━━━\n\n"
+            
+            message += "─────────────\n\n"
     
-    # News 섹션 (최대 3개만)
+    # News 섹션 (최대 3개)
     if groups['News']:
-        message += "*📰 Industry News*\n\n"
+        message += "📰 *INDUSTRY NEWS*\n\n"
         for i, item in enumerate(groups['News'][:3], 1):
-            title = item['title'].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title[:60]}*\n\n"
+            title = item['title'][:70].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
+            message += f"*{i}\\. {title}*\n"
+            
             if item.get('url'):
-                message += f"🔗 [Read News]({item['url']})\n\n"
+                message += f"🔗 [Read More]({item['url']})\n\n"
+        
+        if len(groups['News']) > 3:
+            message += f"_\\.\\.\\. and {len(groups['News']) - 3} more news items_\n\n"
     
-    message += "_🤖 Automated Report for 6G Engineers_"
+    message += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    message += "🤖 _Automated Report for 6G Engineers_\n"
+    message += "📧 _Full details in your email_"
     
     # 메시지 길이 제한 (4096자)
     if len(message) > 4000:
         message = message[:3900] + "\\.\\.\\.\n\n_\\(Full report in email\\)_"
     
+    # 전송
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "Markdown",
-        "disable_web_page_preview": False
+        "disable_web_page_preview": True  # 미리보기 비활성화로 깔끔하게
     }
     
     try:
-        print("📱 텔레그램 전송 중...")
+        print("📱 시각적으로 개선된 텔레그램 전송 중...")
         response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
         print("✅ 텔레그램 전송 완료")
     except Exception as e:
         print(f"❌ 텔레그램 오류: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"응답: {e.response.text}")
 
 # ==================== 파일 저장 ====================
 
@@ -706,7 +1189,7 @@ def main():
         send_email(summary_data)
         
         # 5. 텔레그램 전송
-        send_telegram_message(summary_data)
+        send_visual_telegram(summary_data)
         
         print("\n" + "="*60)
         print("✅ 모든 작업 완료!")
