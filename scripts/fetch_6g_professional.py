@@ -101,37 +101,67 @@ def search_arxiv(query, num_results=5):
         print(f"❌ arXiv 검색 오류: {e}")
         return []
 
-def search_ieee(query, num_results=5):
-    """IEEE Xplore 검색 (Journals)"""
-    
+def search_ieee(query, num_results=5, api_key=None):
+    """IEEE Xplore API를 사용한 검색 (Journals)"""
+
     print(f"📰 IEEE Xplore 검색 중: {query}")
-    
-    # IEEE RSS 피드 사용
-    search_url = f"https://ieeexplore.ieee.org/search/searchresult.jsp?newsearch=true&queryText={query}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+
+    # API 키 확인 (환경변수 또는 파라미터)
+    if api_key is None:
+        api_key = os.environ.get('IEEE_API_KEY')
+
+    if not api_key:
+        print("⚠️ IEEE API 키가 설정되지 않았습니다. IEEE_API_KEY 환경변수를 설정하세요.")
+        print("   API 키 발급: https://developer.ieee.org/")
+        return []
+
+    # IEEE Xplore API 엔드포인트
+    api_url = "https://ieeexploreapi.ieee.org/api/v1/search/articles"
+
+    params = {
+        'apikey': api_key,
+        'querytext': query,
+        'max_records': num_results,
+        'sort_order': 'desc',
+        'sort_field': 'publication_year'
     }
-    
+
     try:
-        # Google 검색으로 IEEE 논문 찾기
-        google_url = f"https://www.google.com/search?q=site:ieeexplore.ieee.org+{query}"
-        response = requests.get(google_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
+        response = requests.get(api_url, params=params, timeout=15)
+        response.raise_for_status()
+
+        data = response.json()
+
         results = []
-        # 간단한 더미 데이터 (실제로는 IEEE API 필요)
-        for i in range(min(num_results, 3)):
+        articles = data.get('articles', [])
+
+        for article in articles:
+            title = article.get('title', 'No title')
+            abstract = article.get('abstract', 'No abstract available')
+            article_number = article.get('article_number', '')
+            publication_title = article.get('publication_title', '')
+
+            # 설명 생성 (abstract 앞부분 + 저널명)
+            description = abstract[:200] + '...' if len(abstract) > 200 else abstract
+            if publication_title:
+                description = f"[{publication_title}] {description}"
+
             results.append({
-                'title': f"6G Wireless Communications: Recent Advances (IEEE {i+1})",
-                'description': "IEEE journal article on 6G wireless communications technology and future research directions.",
-                'url': f"https://ieeexplore.ieee.org/document/{1000000+i}",
+                'title': title,
+                'description': description,
+                'url': f"https://ieeexplore.ieee.org/document/{article_number}",
                 'type': 'Journal'
             })
-        
+
         print(f"✅ {len(results)}개 저널 발견")
         return results
-        
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            print(f"❌ IEEE API 인증 오류: API 키를 확인하세요.")
+        else:
+            print(f"❌ IEEE API HTTP 오류: {e}")
+        return []
     except Exception as e:
         print(f"❌ IEEE 검색 오류: {e}")
         return []
