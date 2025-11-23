@@ -938,7 +938,198 @@ def create_visual_html_email(summary_data):
     
     return html
 
+"""
+이메일 클라이언트 호환성이 높은 HTML 템플릿
+CSS 변수 없이 인라인 스타일 사용
+"""
 
+def create_email_safe_html(summary_data):
+    """이메일 클라이언트 호환 HTML 생성"""
+    
+    # 타입별 색상 정의
+    colors = {
+        'Journal': {
+            'primary': '#3b82f6',
+            'bg': '#eff6ff',
+            'icon': '📚',
+            'label': 'Academic Journal'
+        },
+        'Paper': {
+            'primary': '#10b981',
+            'bg': '#f0fdf4',
+            'icon': '📄',
+            'label': 'Research Paper'
+        },
+        'News': {
+            'primary': '#f59e0b',
+            'bg': '#fffbeb',
+            'icon': '📰',
+            'label': 'Industry News'
+        }
+    }
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px;">
+        
+        <!-- 메인 컨테이너 -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 800px; margin: 0 auto;">
+            <tr>
+                <td>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                        
+                        <!-- 헤더 -->
+                        <tr>
+                            <td style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 40px 30px; text-align: center;">
+                                <h1 style="margin: 0 0 8px 0; font-size: 32px; font-weight: 700;">🔬 6G Technology Intelligence</h1>
+                                <p style="margin: 0; font-size: 16px; opacity: 0.9;">Professional Research Report for Engineers</p>
+                                <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 20px; margin-top: 16px; font-size: 14px;">
+                                    📅 {summary_data['generatedAt']}
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <!-- 통계 요약 -->
+                        <tr>
+                            <td style="padding: 30px; background: linear-gradient(to bottom, #f9fafb, white); border-bottom: 1px solid #e5e7eb;">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                    <tr>
+    """
+    
+    # 타입별 개수 계산
+    type_counts = {'Journal': 0, 'Paper': 0, 'News': 0}
+    for item in summary_data['summaries']:
+        item_type = item.get('type', 'News')
+        type_counts[item_type] = type_counts.get(item_type, 0) + 1
+    
+    stats = [
+        ('📚 Journals', type_counts.get('Journal', 0)),
+        ('📄 Papers', type_counts.get('Paper', 0)),
+        ('📰 News', type_counts.get('News', 0))
+    ]
+    
+    for label, count in stats:
+        html += f"""
+                                        <td style="text-align: center; padding: 0 20px;">
+                                            <div style="font-size: 36px; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{count}</div>
+                                            <div style="font-size: 13px; color: #6b7280; margin-top: 4px; font-weight: 500;">{label}</div>
+                                        </td>
+        """
+    
+    html += """
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        
+                        <!-- 컨텐츠 영역 -->
+                        <tr>
+                            <td style="padding: 30px; background-color: #f9fafb;">
+    """
+    
+    # 타입별로 그룹핑
+    groups = {'Journal': [], 'Paper': [], 'News': []}
+    for item in summary_data['summaries']:
+        item_type = item.get('type', 'News')
+        groups[item_type].append(item)
+    
+    # 각 섹션 렌더링
+    section_titles = {
+        'Journal': '📚 Academic Journals',
+        'Paper': '📄 Research Papers',
+        'News': '📰 Industry News'
+    }
+    
+    for section_type in ['Journal', 'Paper', 'News']:
+        items = groups.get(section_type, [])
+        if not items:
+            continue
+        
+        color_config = colors[section_type]
+        
+        # 섹션 헤더
+        html += f"""
+                                <div style="display: flex; align-items: center; margin: 40px 0 24px 0; padding-bottom: 12px; border-bottom: 3px solid #e5e7eb;">
+                                    <span style="font-size: 28px;">{color_config['icon']}</span>
+                                    <span style="font-size: 22px; font-weight: 700; color: #1f2937; margin-left: 12px;">{section_titles[section_type]}</span>
+                                    <span style="margin-left: auto; background: #f3f4f6; color: #6b7280; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;">{len(items)} items</span>
+                                </div>
+        """
+        
+        # 각 카드
+        for item in items:
+            html += f"""
+                                <!-- 카드 시작 -->
+                                <table width="100%" cellpadding="0" cellspacing="0" style="background: white; border-radius: 12px; margin-bottom: 20px; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0,0,0,0.07); border-left: 5px solid {color_config['primary']};">
+                                    <tr>
+                                        <td style="padding: 24px;">
+                                            
+                                            <!-- 타입 배지 -->
+                                            <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 12px; background: {color_config['bg']}; color: {color_config['primary']};">
+                                                {color_config['icon']} {color_config['label']}
+                                            </div>
+                                            
+                                            <!-- 제목 -->
+                                            <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #1f2937; line-height: 1.4;">
+                                                <a href="{item['url']}" target="_blank" style="color: #1f2937; text-decoration: none;">{item['title']}</a>
+                                            </h2>
+                                            
+                                            <!-- 요약 -->
+                                            <div style="color: #4b5563; font-size: 15px; line-height: 1.7; margin-bottom: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 3px solid {color_config['primary']};">
+                                                {item['summary']}
+                                            </div>
+                                            
+                                            <!-- 인사이트 -->
+                                            <div style="background: {color_config['bg']}; border-radius: 8px; padding: 16px; margin-top: 16px; border-left: 3px solid {color_config['primary']};">
+                                                <div style="font-weight: 700; color: {color_config['primary']}; font-size: 14px; margin-bottom: 8px;">
+                                                    💡 Engineer's Insight
+                                                </div>
+                                                <div style="color: #374151; font-size: 14px; line-height: 1.6;">
+                                                    {item['message']}
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 링크 버튼 -->
+                                            <div style="margin-top: 16px;">
+                                                <a href="{item['url']}" target="_blank" style="display: inline-block; padding: 10px 20px; background: {color_config['primary']}; color: white; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">
+                                                    Read Full Article →
+                                                </a>
+                                            </div>
+                                            
+                                        </td>
+                                    </tr>
+                                </table>
+                                <!-- 카드 끝 -->
+            """
+    
+    html += """
+                            </td>
+                        </tr>
+                        
+                        <!-- 푸터 -->
+                        <tr>
+                            <td style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                                <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px 0;">🤖 Automated by GitHub Actions</p>
+                                <p style="color: #6b7280; font-size: 13px; margin: 0 0 12px 0;">Powered by Google Gemini AI</p>
+                                <div style="font-size: 24px; margin-top: 12px;">🔬 6G Intelligence System</div>
+                            </td>
+                        </tr>
+                        
+                    </table>
+                </td>
+            </tr>
+        </table>
+        
+    </body>
+    </html>
+    """
+    
+    return html
 
 # 기존 fetch_6g_professional.py의 send_email 함수를 이것으로 교체
 def send_email(summary_data):
@@ -957,7 +1148,7 @@ def send_email(summary_data):
     msg['To'] = recipient
     
     # 새로운 시각적 HTML 사용
-    html_body = create_visual_html_email(summary_data)
+    html_body = create_email_safe_html(summary_data)
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
     
     try:
