@@ -203,6 +203,15 @@ pip install requests beautifulsoup4 lxml
 - Missing IEEE API key skips journal collection but continues
 - Missing Telegram credentials silently skip notification (not fatal)
 
+### JSON Parsing Error Handling
+- **Issue**: Gemini responses may contain unescaped special characters causing JSON parsing failures
+- **Solution**: Enhanced prompt explicitly instructs Gemini to escape special characters and avoid line breaks
+- **Debugging**: On JSON parse error, the script:
+  - Outputs error position (line, column)
+  - Displays 400-character context around the error
+  - Saves full response to `debug_gemini_response_YYYYMMDD_HHMMSS.txt` for inspection
+  - Falls back to `create_summary_without_ai()` with raw descriptions
+
 ### Web Scraping Challenges
 - Google Scholar scraping may be unstable (relies on HTML structure)
 - All HTTP requests use `User-Agent` header to avoid bot detection

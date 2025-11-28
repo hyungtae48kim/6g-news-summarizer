@@ -401,7 +401,13 @@ def summarize_with_gemini(items):
 자료 목록:
 {items_context}
 
-각 자료에 대해 다음 형식으로 요약하세요. 반드시 JSON 형식만 반환하고 다른 텍스트는 포함하지 마세요:
+각 자료에 대해 다음 형식으로 요약하세요. 반드시 유효한 JSON 형식만 반환하고 다른 텍스트는 포함하지 마세요:
+
+IMPORTANT:
+- JSON 문자열 내부의 모든 특수문자는 반드시 이스케이프하세요 (따옴표, 백슬래시 등)
+- 줄바꿈은 공백으로 대체하세요
+- 문자열을 중간에 끊지 마세요
+- 유효한 JSON만 반환하세요
 
 {{
   "summaries": [
@@ -452,17 +458,31 @@ RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
                 
                 # JSON 파싱
                 clean_text = text.replace("```json", "").replace("```", "").strip()
-                
+
                 # 파싱 전 디버깅
                 print(f"응답 텍스트 길이: {len(clean_text)}")
-                
+
                 try:
                     results = json.loads(clean_text)
                     print(f"✅ {len(results['summaries'])}개 요약 완료")
                     return results
                 except json.JSONDecodeError as e:
                     print(f"❌ JSON 파싱 오류: {e}")
-                    print(f"응답 미리보기: {clean_text[:500]}")
+                    print(f"오류 위치: line {e.lineno}, column {e.colno}")
+
+                    # 문제 영역 출력 (오류 위치 전후 200자)
+                    error_pos = e.pos if hasattr(e, 'pos') else 0
+                    start_pos = max(0, error_pos - 200)
+                    end_pos = min(len(clean_text), error_pos + 200)
+                    print(f"문제 영역:\n{clean_text[start_pos:end_pos]}")
+                    print(f"\n전체 응답 저장 중...")
+
+                    # 디버깅을 위해 전체 응답을 파일로 저장
+                    debug_file = f"debug_gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                    with open(debug_file, 'w', encoding='utf-8') as f:
+                        f.write(clean_text)
+                    print(f"전체 응답이 {debug_file}에 저장되었습니다.")
+
                     return create_summary_without_ai(items)
         
         print("⚠️ AI 요약 실패. 기본 요약 사용.")
