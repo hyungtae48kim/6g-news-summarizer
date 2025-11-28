@@ -4,17 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI-powered 6G technology intelligence system that aggregates and summarizes news from multiple academic and industry sources.
+AI-powered 6G/RAN technology intelligence system with dynamic keyword extraction and intelligent content selection for RAN SW engineers.
 
-**Data Sources**:
-- IEEE Xplore journals (5 items)
-- arXiv papers (3 items)
-- Google Scholar papers (2 items)
-- Google News articles (5 items)
+**Workflow**:
+1. **Hot Keyword Extraction**: Gemini AI analyzes current trends to generate daily-focused search keywords
+2. **Data Collection**: Aggregates 40 items (10 from each source) using the hot keyword
+3. **Intelligent Selection**: AI selects top 10 items most relevant for RAN SW developers
+4. **Deep Analysis**: Provides RAN-focused technical summaries and implementation insights
+
+**Data Sources** (10 items each):
+- IEEE Xplore journals
+- arXiv papers
+- Google Scholar papers
+- Google News articles
 
 **Components**:
 - **Frontend**: React SPA for real-time news search with Claude API web search integration
-- **Backend**: Python automation script for scheduled news fetching, AI summarization, and multi-channel distribution (Email + Telegram)
+- **Backend**: Python automation script with AI-driven keyword extraction, content selection, and multi-channel distribution (Email + Telegram)
 
 ## Commands
 
@@ -64,20 +70,49 @@ pip install requests beautifulsoup4 lxml
 
 **Main Script** ([scripts/fetch_6g_professional.py](scripts/fetch_6g_professional.py))
 
-**Data Collection Pipeline** (15 items total):
-1. IEEE Xplore API: 5 journals (requires `IEEE_API_KEY`)
-2. arXiv API: 3 papers
-3. Google Scholar scraping: 2 papers
-4. Google News RSS: 5 news articles
+**Intelligent Pipeline**:
 
-**AI Analysis**:
-- Uses Gemini 2.5 Flash API with "6G Technology Research Engineer" persona
-- Generates technical summaries and practical insights
-- Fallback to raw descriptions if API fails
+1. **Hot Keyword Extraction** (`extract_hot_keywords()`):
+   - Uses Gemini with RAN Network Professor persona
+   - Considers current trends: O-RAN, AI/ML in RAN, terahertz, RIS, network slicing
+   - Returns focused 3-5 word search query
+   - Fallback: "6G wireless communications"
+
+2. **Data Collection** (40 items total):
+   - IEEE Xplore API: 10 journals (requires `IEEE_API_KEY`)
+   - arXiv API: 10 papers
+   - Google Scholar scraping: 10 papers
+   - Google News RSS: 10 news articles
+   - All sources use the extracted hot keyword
+
+3. **Intelligent Selection** (`select_top_items_for_ran_engineers()`):
+   - Gemini analyzes all 40 items with RAN SW Engineer criteria
+   - Selection criteria:
+     - Practical applicability to RAN software development
+     - Novel algorithms/architectures for RAN
+     - O-RAN and Open RAN developments
+     - AI/ML in RAN optimization
+     - PHY layer innovations affecting upper layers
+   - Returns top 10 most relevant items
+
+4. **Deep Analysis** (`summarize_with_gemini()`):
+   - RAN Network Professor & RAN SW Engineer persona
+   - Focus areas:
+     - RAN protocol stack (MAC/RLC/PDCP/RRC) impact
+     - O-RAN/Open RAN interfaces and architecture
+     - AI/ML-based RAN optimization algorithms
+     - Real-time performance requirements
+     - Implementation considerations
+   - Fallback to raw descriptions if API fails
 
 **Output Format**:
 - Categorized by type (Journal/Paper/News)
-- Each item includes: title, summary (Korean), engineer's message (Korean), URL, type
+- Each item includes:
+  - Title (original English)
+  - Summary (Korean, with RAN architecture/algorithm/protocol perspective)
+  - Message (Korean, SW implementation insights for RAN developers)
+  - URL
+  - Type
 
 #### Distribution Channels
 
@@ -95,6 +130,7 @@ pip install requests beautifulsoup4 lxml
 
 3. **File Storage**:
    - Saves to `output/6g_report_YYYY-MM-DD.md` (Markdown format)
+   - Includes hot keyword in report metadata
    - Uploaded as GitHub Actions artifact (90-day retention)
 
 ### Data Structure
@@ -146,12 +182,22 @@ pip install requests beautifulsoup4 lxml
 
 ## Key Implementation Details
 
+### AI-Driven Workflow
+- **Three Gemini API Calls Per Run**:
+  1. Hot keyword extraction (~100 tokens)
+  2. Top 10 item selection (~200 tokens)
+  3. Deep analysis and summarization (~8192 tokens)
+- **Total Token Usage**: ~8500 tokens per execution
+- **Daily Execution**: Well within free tier limits
+
 ### API Rate Limiting
 - **Gemini API**: Free tier allows 1,500 requests/month
 - **Frontend (Claude API)**: Implements 429 error handling with user guidance to wait 1-2 minutes
 - **IEEE API**: Authentication errors (403) are caught and logged
 
 ### Error Resilience
+- Hot keyword extraction failure → fallback to "6G wireless communications"
+- Item selection failure → uses first 10 items from collection
 - Script continues with partial data if any source fails
 - Gemini parsing errors trigger fallback to raw descriptions
 - Missing IEEE API key skips journal collection but continues
@@ -202,18 +248,33 @@ python scripts/fetch_6g_professional.py
 
 ## Important Notes for Development
 
-1. **Frontend Security Issue**: Claude API key is exposed in browser requests. For production, implement backend proxy.
+1. **Dynamic Content Selection**: Unlike static keyword systems, this uses AI to:
+   - Extract daily-relevant search keywords
+   - Collect 40 items instead of 15
+   - Intelligently select top 10 for RAN SW engineers
+   - Result: Higher quality, more relevant content daily
 
-2. **IEEE API Dependency**: Script requires valid IEEE API key. Will skip IEEE journals if key is missing/invalid but continues with other sources.
+2. **RAN-Focused Persona**: Uses dual persona approach:
+   - RAN Network Professor (theoretical depth)
+   - RAN SW Engineer (practical implementation)
+   - Focus on O-RAN, protocol stack, AI/ML, real-time optimization
 
-3. **Bilingual Output**: All summaries/insights are in Korean, but titles remain in original English. This is intentional for the target audience.
+3. **Frontend Security Issue**: Claude API key is exposed in browser requests. For production, implement backend proxy.
 
-4. **AI Prompt Engineering**: Uses explicit "6G Technology Research Engineer" persona in Gemini prompt for better technical analysis.
+4. **IEEE API Dependency**: Script requires valid IEEE API key. Will skip IEEE journals if key is missing/invalid but continues with other sources.
 
-5. **File Artifacts**:
+5. **Bilingual Output**: All summaries/insights are in Korean with RAN-specific technical details, but titles remain in original English. This is intentional for the target audience.
+
+6. **AI Prompt Engineering**:
+   - Hot keyword: RAN-focused trend analysis with current year context
+   - Selection: Practical RAN SW development criteria
+   - Summarization: RAN protocol stack and implementation perspective
+
+7. **File Artifacts**:
    - GitHub Actions saves to `output/` directory
    - 90-day retention for markdown reports
+   - Report includes hot keyword metadata
 
-6. **Multiple Email Templates**: Script contains three different HTML email template functions. Currently uses `create_email_safe_html()` for maximum compatibility.
+8. **Multiple Email Templates**: Script contains three different HTML email template functions. Currently uses `create_email_safe_html()` for maximum compatibility.
 
-7. **Cost**: Entire system operates on free tiers (Gemini Free API, IEEE API free tier, GitHub Actions free minutes, Gmail SMTP, Telegram Bot API).
+9. **Cost**: Entire system operates on free tiers (Gemini Free API with ~8500 tokens/day, IEEE API free tier, GitHub Actions free minutes, Gmail SMTP, Telegram Bot API).

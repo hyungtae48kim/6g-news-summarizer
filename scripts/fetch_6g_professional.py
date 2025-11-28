@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-6G 기술 전문 검색 및 요약 시스템 (Engineer Persona)
-Journal, Paper, News 각 5개씩 총 15개 수집 및 요약
+6G 기술 전문 검색 및 요약 시스템 (RAN Network Professor & RAN SW Engineer Persona)
+- 매일 동적으로 6G hot keywords 추출
+- 각 소스에서 10개씩 총 40개 아이템 수집
+- RAN SW 개발자 관점에서 10개 선별
+- 선별된 아이템에 대해 심층 요약
 """
 
 import os
@@ -12,6 +15,77 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from bs4 import BeautifulSoup
+
+# ==================== Hot Keyword 추출 ====================
+
+def extract_hot_keywords():
+    """Gemini를 사용하여 오늘의 6G hot keywords 추출"""
+
+    api_key = os.environ.get('GEMINI_API_KEY')
+
+    if not api_key:
+        print("⚠️ GEMINI_API_KEY 없음. 기본 키워드 사용.")
+        return "6G wireless communications"
+
+    prompt = f"""You are a RAN Network professor and expert in 6G technology trends.
+
+Today's date: {datetime.now().strftime('%Y-%m-%d')}
+
+Based on the latest 6G technology trends in {datetime.now().year}, suggest ONE focused search query (3-5 words) that would be most relevant for RAN SW engineers this week.
+
+Consider these areas:
+- RAN architecture and protocols
+- O-RAN and Open RAN developments
+- 6G PHY layer innovations
+- AI/ML in RAN
+- Network slicing
+- Terahertz communications
+- Reconfigurable intelligent surfaces (RIS)
+- Digital twin for networks
+
+Return ONLY the search query phrase in English, nothing else. No explanation, no quotes.
+
+Example outputs:
+- 6G RAN AI optimization
+- Open RAN intelligent controller
+- 6G terahertz beamforming
+"""
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 100,
+        }
+    }
+
+    try:
+        print("🔍 Gemini로 오늘의 Hot Keyword 추출 중...")
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        if 'candidates' in data and len(data['candidates']) > 0:
+            candidate = data['candidates'][0]
+
+            if 'content' in candidate and 'parts' in candidate['content']:
+                keyword = candidate['content']['parts'][0].get('text', '').strip()
+                keyword = keyword.replace('"', '').replace("'", "").strip()
+
+                print(f"✅ Hot Keyword: '{keyword}'")
+                return keyword
+
+        print("⚠️ 키워드 추출 실패. 기본 키워드 사용.")
+        return "6G wireless communications"
+
+    except Exception as e:
+        print(f"❌ 키워드 추출 오류: {e}")
+        return "6G wireless communications"
 
 # ==================== 검색 함수 ====================
 
@@ -199,6 +273,104 @@ def search_google_news(query, num_results=5):
         print(f"❌ Google News 검색 오류: {e}")
         return []
 
+# ==================== AI 아이템 선별 함수 ====================
+
+def select_top_items_for_ran_engineers(all_items, top_n=10):
+    """Gemini를 사용하여 RAN SW 개발자에게 가장 유용한 아이템 선별"""
+
+    api_key = os.environ.get('GEMINI_API_KEY')
+
+    if not api_key:
+        print("⚠️ GEMINI_API_KEY 없음. 상위 10개 아이템만 사용.")
+        return all_items[:top_n]
+
+    # 아이템 정보 구성
+    items_context = ""
+    for i, item in enumerate(all_items, 1):
+        title = item['title'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:150]
+        description = item['description'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:200]
+
+        items_context += f"\n{i}. [{item['type']}] {title}\n"
+        items_context += f"   Description: {description}\n"
+
+    prompt = f"""You are a RAN Network Professor and RAN SW Engineer expert.
+
+Given {len(all_items)} items below (Journals, Papers, News), select exactly {top_n} items that would provide the MOST valuable insights for RAN SW developers.
+
+Selection criteria:
+- Practical applicability to RAN software development
+- Novel algorithms or architectures relevant to RAN
+- O-RAN and Open RAN developments
+- AI/ML applications in RAN optimization
+- PHY layer innovations affecting upper layers
+- Real-world deployment experiences
+- Performance optimization techniques
+
+Items:
+{items_context}
+
+Return ONLY a JSON array of selected item numbers (1-indexed). No explanation, just the array.
+
+Example output:
+[1, 5, 7, 12, 15, 18, 23, 28, 35, 40]
+"""
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 200,
+        }
+    }
+
+    try:
+        print(f"🤖 Gemini로 RAN SW 개발자용 Top {top_n} 아이템 선별 중...")
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+        response.raise_for_status()
+
+        data = response.json()
+
+        if 'candidates' in data and len(data['candidates']) > 0:
+            candidate = data['candidates'][0]
+
+            if 'content' in candidate and 'parts' in candidate['content']:
+                text = candidate['content']['parts'][0].get('text', '').strip()
+
+                # JSON 파싱 (배열 추출)
+                clean_text = text.replace("```json", "").replace("```", "").strip()
+
+                try:
+                    selected_indices = json.loads(clean_text)
+
+                    # 선별된 아이템만 추출 (1-indexed를 0-indexed로 변환)
+                    selected_items = []
+                    for idx in selected_indices:
+                        if 1 <= idx <= len(all_items):
+                            selected_items.append(all_items[idx - 1])
+
+                    if len(selected_items) >= top_n:
+                        print(f"✅ {len(selected_items)}개 아이템 선별 완료")
+                        return selected_items[:top_n]
+                    else:
+                        print(f"⚠️ 선별된 아이템 부족 ({len(selected_items)}개). 상위 {top_n}개 사용.")
+                        return all_items[:top_n]
+
+                except json.JSONDecodeError as e:
+                    print(f"❌ JSON 파싱 오류: {e}")
+                    print(f"응답: {clean_text[:200]}")
+                    return all_items[:top_n]
+
+        print("⚠️ 아이템 선별 실패. 상위 10개 사용.")
+        return all_items[:top_n]
+
+    except Exception as e:
+        print(f"❌ 아이템 선별 오류: {e}")
+        return all_items[:top_n]
+
 # ==================== AI 요약 함수 ====================
 
 def summarize_with_gemini(items):
@@ -222,9 +394,9 @@ def summarize_with_gemini(items):
         items_context += f"Description: {description}\n"
         items_context += f"Link: {url}\n"
     
-    prompt = f"""당신은 6G 기술을 연구하는 전문 엔지니어입니다.
+    prompt = f"""당신은 RAN Network Professor이자 RAN SW 개발 엔지니어입니다.
 
-다음 6G 관련 자료들(Journal, Paper, News)을 분석하고 각각 요약해주세요.
+다음 선별된 6G/RAN 관련 자료들을 RAN SW 개발자 관점에서 분석하고 요약해주세요.
 
 자료 목록:
 {items_context}
@@ -235,8 +407,8 @@ def summarize_with_gemini(items):
   "summaries": [
     {{
       "title": "논문 또는 저널 또는 뉴스 제목",
-      "summary": "핵심 내용을 3-4문장으로 요약 (한국어)",
-      "message": "이 자료가 6G 엔지니어에게 주는 핵심 메시지와 실무적 시사점 (한국어)",
+      "summary": "핵심 내용을 3-4문장으로 요약 (한국어). RAN 아키텍처, 알고리즘, 프로토콜 관점 포함.",
+      "message": "RAN SW 개발자에게 주는 실무적 시사점과 적용 가능성 (한국어). 구체적인 SW 구현 관점 제시.",
       "url": "원문 링크",
       "type": "Journal 또는 Paper 또는 News"
     }}
@@ -244,7 +416,12 @@ def summarize_with_gemini(items):
   "generatedAt": "{datetime.now().strftime('%Y-%m-%d')}"
 }}
 
-엔지니어 관점에서 기술적 통찰과 실무 적용 가능성을 중심으로 분석하세요."""
+RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
+- RAN 프로토콜 스택 (MAC/RLC/PDCP/RRC) 영향
+- O-RAN/Open RAN 인터페이스 및 아키텍처
+- AI/ML 기반 RAN 최적화 알고리즘
+- 실시간 성능 요구사항 및 최적화 기법
+- 실제 구현 시 고려사항"""
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
@@ -1384,61 +1561,99 @@ def save_to_file(summary_data):
 
 def main():
     """메인 실행 함수"""
-    
-    print("="*60)
-    print("6G Technology Intelligence System")
-    print("Persona: 6G Technology Research Engineer")
-    print(f"실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*60)
-    
+
+    print("="*70)
+    print("🔬 6G/RAN Technology Intelligence System")
+    print("👨‍🏫 Persona: RAN Network Professor & RAN SW Engineer")
+    print(f"📅 실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*70)
+
     try:
-        # 1. 데이터 수집 (총 15개)
+        # Step 1: Hot Keyword 추출
+        print("\n" + "="*70)
+        print("STEP 1: Hot Keyword 추출")
+        print("="*70)
+        hot_keyword = extract_hot_keywords()
+        print(f"🎯 오늘의 검색 키워드: '{hot_keyword}'")
+
+        # Step 2: 데이터 수집 (각 소스에서 10개씩, 총 40개)
+        print("\n" + "="*70)
+        print("STEP 2: 데이터 수집 (각 소스 10개씩)")
+        print("="*70)
         all_items = []
-        
-        # Journals (5개)
-        journals = search_ieee("6G wireless communications", num_results=5)
+
+        # IEEE Journals (10개)
+        journals = search_ieee(hot_keyword, num_results=10)
         all_items.extend(journals)
-        
-        # Papers (5개)
-        papers_arxiv = search_arxiv("6G wireless", num_results=3)
-        papers_scholar = search_google_scholar("6G technology", num_results=2)
+
+        # arXiv Papers (10개)
+        papers_arxiv = search_arxiv(hot_keyword, num_results=10)
         all_items.extend(papers_arxiv)
+
+        # Google Scholar Papers (10개)
+        papers_scholar = search_google_scholar(hot_keyword, num_results=10)
         all_items.extend(papers_scholar)
-        
-        # News (5개)
-        news = search_google_news("6G technology 2025", num_results=5)
+
+        # Google News (10개)
+        news = search_google_news(hot_keyword, num_results=10)
         all_items.extend(news)
-        
+
         print(f"\n✅ 총 {len(all_items)}개 자료 수집 완료")
-        print(f"  - Journals: {len(journals)}개")
-        print(f"  - Papers: {len(papers_arxiv) + len(papers_scholar)}개")
-        print(f"  - News: {len(news)}개")
-        
+        print(f"  📚 IEEE Journals: {len(journals)}개")
+        print(f"  📄 arXiv Papers: {len(papers_arxiv)}개")
+        print(f"  📝 Scholar Papers: {len(papers_scholar)}개")
+        print(f"  📰 Google News: {len(news)}개")
+
         if not all_items:
             print("❌ 수집된 자료가 없습니다.")
             return
-        
-        # 2. AI 요약
-        summary_data = summarize_with_gemini(all_items)
-        
-        # 3. 파일 저장
+
+        # Step 3: RAN SW 개발자 관점에서 Top 10 선별
+        print("\n" + "="*70)
+        print("STEP 3: RAN SW 개발자 관점 Top 10 선별")
+        print("="*70)
+        selected_items = select_top_items_for_ran_engineers(all_items, top_n=10)
+
+        print(f"\n선별된 아이템 구성:")
+        selected_types = {'Journal': 0, 'Paper': 0, 'News': 0}
+        for item in selected_items:
+            item_type = item.get('type', 'News')
+            selected_types[item_type] = selected_types.get(item_type, 0) + 1
+
+        print(f"  📚 Journals: {selected_types.get('Journal', 0)}개")
+        print(f"  📄 Papers: {selected_types.get('Paper', 0)}개")
+        print(f"  📰 News: {selected_types.get('News', 0)}개")
+
+        # Step 4: AI 심층 요약
+        print("\n" + "="*70)
+        print("STEP 4: RAN SW 개발자 관점 심층 요약")
+        print("="*70)
+        summary_data = summarize_with_gemini(selected_items)
+
+        # Step 5: 파일 저장
+        print("\n" + "="*70)
+        print("STEP 5: 결과 저장 및 전송")
+        print("="*70)
         save_to_file(summary_data)
-        
-        # 4. 이메일 전송
+
+        # Step 6: 이메일 전송
         send_email(summary_data)
-        
-        # 5. 텔레그램 전송
+
+        # Step 7: 텔레그램 전송
         send_visual_telegram(summary_data)
-        
-        print("\n" + "="*60)
+
+        print("\n" + "="*70)
         print("✅ 모든 작업 완료!")
-        print(f"  - 자료 수집: {len(all_items)}개")
-        print(f"  - AI 요약: {len(summary_data['summaries'])}개")
-        print(f"  - 파일 저장: ✅")
-        print(f"  - 이메일 전송: ✅")
-        print(f"  - 텔레그램 전송: ✅")
-        print("="*60)
-        
+        print("="*70)
+        print(f"  🔍 Hot Keyword: '{hot_keyword}'")
+        print(f"  📊 수집된 자료: {len(all_items)}개")
+        print(f"  🎯 선별된 자료: {len(selected_items)}개")
+        print(f"  📝 요약 완료: {len(summary_data['summaries'])}개")
+        print(f"  💾 파일 저장: ✅")
+        print(f"  📧 이메일 전송: ✅")
+        print(f"  📱 텔레그램 전송: ✅")
+        print("="*70)
+
     except Exception as e:
         print(f"\n❌ 오류 발생: {str(e)}")
         import traceback
