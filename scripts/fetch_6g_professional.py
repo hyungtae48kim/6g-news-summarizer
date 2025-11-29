@@ -11,10 +11,43 @@ import os
 import json
 import smtplib
 import requests
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from bs4 import BeautifulSoup
+
+# ==================== 유틸리티 함수 ====================
+
+def clean_json_string(text):
+    """JSON 문자열에서 문제가 될 수 있는 특수문자 정제"""
+    # 백슬래시와 따옴표 문제 해결
+    # 이미 이스케이프된 백슬래시 보호
+    text = text.replace('\\\\', '\x00')  # 임시 마커
+    # 이스케이프되지 않은 백슬래시 제거
+    text = text.replace('\\', '')
+    # 임시 마커 복원
+    text = text.replace('\x00', '\\\\')
+
+    return text
+
+def extract_json_from_text(text):
+    """텍스트에서 JSON 객체/배열 추출"""
+    # 마크다운 코드블록 제거
+    text = re.sub(r'```(?:json|python)?\s*', '', text)
+    text = text.replace('```', '')
+
+    # JSON 배열 찾기 [...]
+    array_match = re.search(r'\[[\s\S]*\]', text)
+    if array_match:
+        return array_match.group(0).strip()
+
+    # JSON 객체 찾기 {...}
+    obj_match = re.search(r'\{[\s\S]*\}', text)
+    if obj_match:
+        return obj_match.group(0).strip()
+
+    return text.strip()
 
 # ==================== Hot Keyword 추출 ====================
 
@@ -59,32 +92,63 @@ Example outputs:
         }],
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 100,
+            "maxOutputTokens": 4096,  # Gemini 2.5 uses ~2000 tokens for thinking, need extra for actual output
         }
     }
 
     try:
         print("🔍 Gemini로 오늘의 Hot Keyword 추출 중...")
         response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=30)
+
+        # 429 Rate Limit 처리
+        if response.status_code == 429:
+            print("⚠️ Rate limit 도달. 5초 대기 후 재시도...")
+            import time
+            time.sleep(5)
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=30)
+
         response.raise_for_status()
 
         data = response.json()
 
+        # 디버깅: API 응답 구조 확인
+        print(f"📝 Gemini API 응답 키: {list(data.keys())}")
+
         if 'candidates' in data and len(data['candidates']) > 0:
             candidate = data['candidates'][0]
 
-            if 'content' in candidate and 'parts' in candidate['content']:
-                keyword = candidate['content']['parts'][0].get('text', '').strip()
-                keyword = keyword.replace('"', '').replace("'", "").strip()
+            # 디버깅: candidate 구조 확인
+            print(f"📝 Candidate 키: {list(candidate.keys())}")
 
-                print(f"✅ Hot Keyword: '{keyword}'")
-                return keyword
+            # finishReason 확인
+            finish_reason = candidate.get('finishReason', 'UNKNOWN')
+            if finish_reason == 'MAX_TOKENS':
+                print(f"⚠️ MAX_TOKENS에 도달. maxOutputTokens를 늘려야 합니다.")
+
+            if 'content' in candidate:
+                content = candidate['content']
+                if 'parts' in content and len(content['parts']) > 0:
+                    keyword = content['parts'][0].get('text', '').strip()
+                    keyword = keyword.replace('"', '').replace("'", "").strip()
+
+                    if keyword:
+                        print(f"✅ Hot Keyword: '{keyword}'")
+                        return keyword
+                    else:
+                        print("⚠️ 키워드가 비어있음.")
+                else:
+                    print(f"⚠️ parts 없음. Content: {content}")
+            else:
+                print(f"⚠️ content 없음. Candidate: {candidate}")
 
         print("⚠️ 키워드 추출 실패. 기본 키워드 사용.")
+        print(f"📝 전체 응답: {json.dumps(data, indent=2, ensure_ascii=False)[:500]}")
         return "6G wireless communications"
 
     except Exception as e:
         print(f"❌ 키워드 추출 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return "6G wireless communications"
 
 # ==================== 검색 함수 ====================
@@ -284,11 +348,12 @@ def select_top_items_for_ran_engineers(all_items, top_n=10):
         print("⚠️ GEMINI_API_KEY 없음. 상위 10개 아이템만 사용.")
         return all_items[:top_n]
 
-    # 아이템 정보 구성
+    # 아이템 정보 구성 (특수문자 완전 제거)
     items_context = ""
     for i, item in enumerate(all_items, 1):
-        title = item['title'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:150]
-        description = item['description'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:200]
+        # 특수문자 완전 제거 (백슬래시 이스케이프 대신)
+        title = item['title'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').strip()[:150]
+        description = item['description'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').strip()[:200]
 
         items_context += f"\n{i}. [{item['type']}] {title}\n"
         items_context += f"   Description: {description}\n"
@@ -309,9 +374,12 @@ Selection criteria:
 Items:
 {items_context}
 
-Return ONLY a JSON array of selected item numbers (1-indexed). No explanation, just the array.
+IMPORTANT: Return ONLY a valid JSON array of selected item numbers (1-indexed).
+- No markdown code blocks
+- No explanations
+- Just the plain JSON array
 
-Example output:
+Example output format:
 [1, 5, 7, 12, 15, 18, 23, 28, 35, 40]
 """
 
@@ -323,13 +391,29 @@ Example output:
         }],
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 200,
+            "maxOutputTokens": 8192,  # Gemini 2.5 uses ~3000-4000 tokens for thinking on complex tasks
         }
     }
 
     try:
         print(f"🤖 Gemini로 RAN SW 개발자용 Top {top_n} 아이템 선별 중...")
+
+        # Rate limit 방지 대기
+        import time
+        time.sleep(2)
+
         response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+
+        # 429 Rate Limit 및 500 Server Error 처리
+        if response.status_code == 429:
+            print("⚠️ Rate limit 도달. 10초 대기 후 재시도...")
+            time.sleep(10)
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+        elif response.status_code == 500:
+            print("⚠️ 서버 오류. 5초 대기 후 재시도...")
+            time.sleep(5)
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+
         response.raise_for_status()
 
         data = response.json()
@@ -337,20 +421,37 @@ Example output:
         if 'candidates' in data and len(data['candidates']) > 0:
             candidate = data['candidates'][0]
 
-            if 'content' in candidate and 'parts' in candidate['content']:
+            # finishReason 확인
+            finish_reason = candidate.get('finishReason', 'UNKNOWN')
+            if finish_reason == 'MAX_TOKENS':
+                print(f"⚠️ MAX_TOKENS에 도달. maxOutputTokens를 늘려야 합니다.")
+
+            if 'content' in candidate and 'parts' in candidate['content'] and len(candidate['content']['parts']) > 0:
                 text = candidate['content']['parts'][0].get('text', '').strip()
 
-                # JSON 파싱 (배열 추출)
-                clean_text = text.replace("```json", "").replace("```", "").strip()
+                # JSON 추출 및 정제
+                json_text = extract_json_from_text(text)
+                clean_text = clean_json_string(json_text)
+
+                # 응답 디버깅
+                print(f"📝 Gemini 응답 (처음 300자): {clean_text[:300]}")
 
                 try:
                     selected_indices = json.loads(clean_text)
 
+                    # 배열인지 확인
+                    if not isinstance(selected_indices, list):
+                        print(f"⚠️ 응답이 배열이 아님: {type(selected_indices)}")
+                        print(f"📝 응답 내용: {selected_indices}")
+                        return all_items[:top_n]
+
                     # 선별된 아이템만 추출 (1-indexed를 0-indexed로 변환)
                     selected_items = []
                     for idx in selected_indices:
-                        if 1 <= idx <= len(all_items):
+                        if isinstance(idx, int) and 1 <= idx <= len(all_items):
                             selected_items.append(all_items[idx - 1])
+                        else:
+                            print(f"⚠️ 잘못된 인덱스 무시: {idx}")
 
                     if len(selected_items) >= top_n:
                         print(f"✅ {len(selected_items)}개 아이템 선별 완료")
@@ -361,14 +462,28 @@ Example output:
 
                 except json.JSONDecodeError as e:
                     print(f"❌ JSON 파싱 오류: {e}")
-                    print(f"응답: {clean_text[:200]}")
+                    print(f"❌ 오류 위치: line {e.lineno}, column {e.colno}")
+                    print(f"❌ 응답 전체:\n{clean_text[:500]}")
+
+                    # 디버깅 파일 저장
+                    debug_file = f"debug_selection_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                    with open(debug_file, 'w', encoding='utf-8') as f:
+                        f.write(f"원본 텍스트:\n{text}\n\n")
+                        f.write(f"JSON 추출:\n{json_text}\n\n")
+                        f.write(f"정제 후:\n{clean_text}\n")
+                    print(f"💾 전체 응답이 {debug_file}에 저장되었습니다.")
+
                     return all_items[:top_n]
+            else:
+                print(f"⚠️ content 또는 parts 없음. Candidate: {candidate}")
 
         print("⚠️ 아이템 선별 실패. 상위 10개 사용.")
         return all_items[:top_n]
 
     except Exception as e:
         print(f"❌ 아이템 선별 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return all_items[:top_n]
 
 # ==================== AI 요약 함수 ====================
@@ -382,14 +497,14 @@ def summarize_with_gemini(items):
         print("⚠️ GEMINI_API_KEY 없음. AI 요약 생략.")
         return create_summary_without_ai(items)
     
-    # 아이템 정보 구성 (특수문자 이스케이프)
+    # 아이템 정보 구성 (특수문자 완전 제거 - 이스케이프 문제 방지)
     items_context = ""
     for i, item in enumerate(items, 1):
-        # 특수문자 제거 및 이스케이프
-        title = item['title'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:200]
-        description = item['description'].replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').strip()[:300]
-        url = item['url'].replace('"', '\\"').strip()
-        
+        # 특수문자 완전 제거 (JSON 파싱 오류 방지)
+        title = item['title'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()[:200]
+        description = item['description'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()[:300]
+        url = item['url'].replace('"', '').replace('\\', '').strip()
+
         items_context += f"\n{i}. [{item['type']}] {title}\n"
         items_context += f"Description: {description}\n"
         items_context += f"Link: {url}\n"
@@ -430,7 +545,7 @@ RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
 - 실제 구현 시 고려사항"""
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-    
+
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
@@ -439,33 +554,76 @@ RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
             "temperature": 0.3,
             "topK": 40,
             "topP": 0.95,
-            "maxOutputTokens": 8192,
+            "maxOutputTokens": 16384,  # High limit for complex summarization (thinking + long output)
         }
     }
     
     try:
         print("🤖 Gemini AI로 요약 중...")
+
+        # Rate limit 방지 대기
+        import time
+        time.sleep(2)
+
         response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+
+        # 429 Rate Limit 및 500 Server Error 처리
+        if response.status_code == 429:
+            print("⚠️ Rate limit 도달. 10초 대기 후 재시도...")
+            time.sleep(10)
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+        elif response.status_code == 500:
+            print("⚠️ 서버 오류. 5초 대기 후 재시도...")
+            time.sleep(5)
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=60)
+
         response.raise_for_status()
         
         data = response.json()
         
         if 'candidates' in data and len(data['candidates']) > 0:
             candidate = data['candidates'][0]
-            
-            if 'content' in candidate and 'parts' in candidate['content']:
+
+            # finishReason 확인
+            finish_reason = candidate.get('finishReason', 'UNKNOWN')
+            print(f"📝 finishReason: {finish_reason}")
+            if finish_reason == 'MAX_TOKENS':
+                print(f"⚠️ MAX_TOKENS에 도달. 응답이 불완전할 수 있습니다.")
+
+            if 'content' in candidate and 'parts' in candidate['content'] and len(candidate['content']['parts']) > 0:
                 text = candidate['content']['parts'][0].get('text', '')
-                
-                # JSON 파싱
-                clean_text = text.replace("```json", "").replace("```", "").strip()
+
+                # JSON 추출 및 정제
+                json_text = extract_json_from_text(text)
+                clean_text = clean_json_string(json_text)
 
                 # 파싱 전 디버깅
                 print(f"응답 텍스트 길이: {len(clean_text)}")
+                print(f"응답 시작 (200자): {clean_text[:200]}")
 
                 try:
                     results = json.loads(clean_text)
-                    print(f"✅ {len(results['summaries'])}개 요약 완료")
-                    return results
+
+                    # 결과 검증 및 정규화
+                    if isinstance(results, list):
+                        # 배열로 반환된 경우 (summaries만 반환)
+                        print(f"📝 배열 형식 응답 감지. 객체로 변환 중...")
+                        normalized_results = {
+                            "summaries": results,
+                            "generatedAt": datetime.now().strftime('%Y-%m-%d')
+                        }
+                        print(f"✅ {len(normalized_results['summaries'])}개 요약 완료")
+                        return normalized_results
+                    elif isinstance(results, dict):
+                        if 'summaries' not in results:
+                            print(f"⚠️ 'summaries' 키 없음. 응답 키: {list(results.keys())}")
+                            return create_summary_without_ai(items)
+                        print(f"✅ {len(results['summaries'])}개 요약 완료")
+                        return results
+                    else:
+                        print(f"⚠️ 잘못된 응답 타입: {type(results)}")
+                        return create_summary_without_ai(items)
+
                 except json.JSONDecodeError as e:
                     print(f"❌ JSON 파싱 오류: {e}")
                     print(f"오류 위치: line {e.lineno}, column {e.colno}")
@@ -480,7 +638,9 @@ RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
                     # 디버깅을 위해 전체 응답을 파일로 저장
                     debug_file = f"debug_gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
                     with open(debug_file, 'w', encoding='utf-8') as f:
-                        f.write(clean_text)
+                        f.write(f"원본:\n{text}\n\n")
+                        f.write(f"JSON 추출:\n{json_text}\n\n")
+                        f.write(f"정제 후:\n{clean_text}\n")
                     print(f"전체 응답이 {debug_file}에 저장되었습니다.")
 
                     return create_summary_without_ai(items)
@@ -1379,26 +1539,41 @@ def send_email(summary_data):
     gmail_user = os.environ.get('GMAIL_USER')
     gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
     recipient = os.environ.get('RECIPIENT_EMAIL')
-    
+
     if not all([gmail_user, gmail_password, recipient]):
-        print("⚠️ 이메일 설정 없음. 전송 생략.")
+        missing = []
+        if not gmail_user: missing.append('GMAIL_USER')
+        if not gmail_password: missing.append('GMAIL_APP_PASSWORD')
+        if not recipient: missing.append('RECIPIENT_EMAIL')
+        print(f"⚠️ 이메일 설정 없음: {', '.join(missing)}. 전송 생략.")
         return
-    
+
     msg = MIMEMultipart('alternative')
     msg['Subject'] = f'🔬 6G Technology Intelligence Report - {summary_data["generatedAt"]}'
     msg['From'] = gmail_user
     msg['To'] = recipient
-    
+
     # 새로운 시각적 HTML 사용
     html_body = create_email_safe_html(summary_data)
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
-    
+
     try:
         print("📧 시각적으로 개선된 이메일 전송 중...")
+        print(f"   발신: {gmail_user}")
+        print(f"   수신: {recipient}")
+
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.set_debuglevel(0)  # 디버그 비활성화
             server.login(gmail_user, gmail_password)
             server.send_message(msg)
         print("✅ 이메일 전송 완료")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ Gmail 인증 실패: {e}")
+        print("\n💡 해결 방법:")
+        print("1. GMAIL_APP_PASSWORD가 16자리 앱 비밀번호인지 확인하세요 (일반 비밀번호 아님)")
+        print("2. Gmail 계정에서 2단계 인증이 활성화되어 있는지 확인하세요")
+        print("3. 앱 비밀번호 생성: https://myaccount.google.com/apppasswords")
+        print("4. 환경변수 확인: echo $GMAIL_APP_PASSWORD")
     except Exception as e:
         print(f"❌ 이메일 전송 오류: {e}")
 
