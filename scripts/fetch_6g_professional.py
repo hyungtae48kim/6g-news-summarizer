@@ -322,10 +322,24 @@ def search_google_news(query, num_results=5):
         
         results = []
         for item in items:
+            # Google News RSS uses redirect URLs - extract the actual URL
+            redirect_url = item.link.text if item.link else ''
+            actual_url = redirect_url
+
+            # Try to resolve the redirect to get the actual article URL
+            if redirect_url:
+                try:
+                    # Follow redirects to get the final URL
+                    head_response = requests.head(redirect_url, allow_redirects=True, timeout=5)
+                    actual_url = head_response.url
+                except:
+                    # If redirect fails, keep the original URL
+                    actual_url = redirect_url
+
             results.append({
                 'title': item.title.text if item.title else '',
                 'description': item.description.text if item.description else '',
-                'url': item.link.text if item.link else '',
+                'url': actual_url,
                 'pub_date': item.pubDate.text if item.pubDate else '',
                 'type': 'News'
             })
@@ -1588,105 +1602,106 @@ def send_email(summary_data):
 """
 
 def send_visual_telegram(summary_data):
-    """시각적으로 개선된 텔레그램 메시지 전송"""
-    
+    """시각적으로 개선된 텔레그램 메시지 전송 (HTML 포맷)"""
+
     import requests
     import os
-    
+    import html
+
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    
+
     if not bot_token or not chat_id:
         print("⚠️ 텔레그램 설정 없음. 전송 생략.")
         return
-    
+
     # 타입별 그룹핑
     groups = {'Journal': [], 'Paper': [], 'News': []}
     for item in summary_data['summaries']:
         item_type = item.get('type', 'News')
         groups[item_type].append(item)
-    
-    # 헤더 메시지
-    message = "🔬 *6G Technology Intelligence Report*\n"
-    message += f"📅 _{summary_data['generatedAt']}_\n\n"
-    
+
+    # HTML 포맷으로 메시지 작성 (Markdown보다 안정적)
+    message = "🔬 <b>6G Technology Intelligence Report</b>\n"
+    message += f"📅 <i>{html.escape(summary_data['generatedAt'])}</i>\n\n"
+
     # 통계 요약
-    message += "📊 *Quick Summary*\n"
+    message += "📊 <b>Quick Summary</b>\n"
     message += f"├─ 📚 Journals: {len(groups['Journal'])}\n"
     message += f"├─ 📄 Papers: {len(groups['Paper'])}\n"
     message += f"└─ 📰 News: {len(groups['News'])}\n\n"
     message += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    
+
     # Journal 섹션
     if groups['Journal']:
-        message += "📚 *ACADEMIC JOURNALS*\n\n"
+        message += "📚 <b>ACADEMIC JOURNALS</b>\n\n"
         for i, item in enumerate(groups['Journal'], 1):
-            # 제목
-            title = item['title'][:80].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title}*\n\n"
-            
+            # 제목 (HTML 이스케이프)
+            title = html.escape(item['title'][:80])
+            message += f"<b>{i}. {title}</b>\n\n"
+
             # 요약 (짧게)
-            summary = item['summary'][:120].replace('_', '\\_').replace('*', '\\*')
-            message += f"📝 {summary}\\.\\.\\.\n\n"
-            
+            summary = html.escape(item['summary'][:120])
+            message += f"📝 {summary}...\n\n"
+
             # 인사이트
-            insight = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
-            message += f"💡 _{insight}_\n\n"
-            
+            insight = html.escape(item['message'][:100])
+            message += f"💡 <i>{insight}</i>\n\n"
+
             # 링크
             if item.get('url'):
-                message += f"🔗 [Read Full Article]({item['url']})\n\n"
-            
+                message += f"🔗 <a href=\"{item['url']}\">Read Full Article</a>\n\n"
+
             message += "─────────────\n\n"
-    
+
     # Paper 섹션
     if groups['Paper']:
-        message += "📄 *RESEARCH PAPERS*\n\n"
+        message += "📄 <b>RESEARCH PAPERS</b>\n\n"
         for i, item in enumerate(groups['Paper'], 1):
-            title = item['title'][:80].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title}*\n\n"
-            
-            summary = item['summary'][:120].replace('_', '\\_').replace('*', '\\*')
-            message += f"📝 {summary}\\.\\.\\.\n\n"
-            
-            insight = item['message'][:100].replace('_', '\\_').replace('*', '\\*')
-            message += f"💡 _{insight}_\n\n"
-            
+            title = html.escape(item['title'][:80])
+            message += f"<b>{i}. {title}</b>\n\n"
+
+            summary = html.escape(item['summary'][:120])
+            message += f"📝 {summary}...\n\n"
+
+            insight = html.escape(item['message'][:100])
+            message += f"💡 <i>{insight}</i>\n\n"
+
             if item.get('url'):
-                message += f"🔗 [Read Paper]({item['url']})\n\n"
-            
+                message += f"🔗 <a href=\"{item['url']}\">Read Paper</a>\n\n"
+
             message += "─────────────\n\n"
-    
+
     # News 섹션 (최대 3개)
     if groups['News']:
-        message += "📰 *INDUSTRY NEWS*\n\n"
+        message += "📰 <b>INDUSTRY NEWS</b>\n\n"
         for i, item in enumerate(groups['News'][:3], 1):
-            title = item['title'][:70].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[')
-            message += f"*{i}\\. {title}*\n"
-            
+            title = html.escape(item['title'][:70])
+            message += f"<b>{i}. {title}</b>\n"
+
             if item.get('url'):
-                message += f"🔗 [Read More]({item['url']})\n\n"
-        
+                message += f"🔗 <a href=\"{item['url']}\">Read More</a>\n\n"
+
         if len(groups['News']) > 3:
-            message += f"_\\.\\.\\. and {len(groups['News']) - 3} more news items_\n\n"
-    
+            message += f"<i>... and {len(groups['News']) - 3} more news items</i>\n\n"
+
     message += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    message += "🤖 _Automated Report for 6G Engineers_\n"
-    message += "📧 _Full details in your email_"
-    
+    message += "🤖 <i>Automated Report for 6G Engineers</i>\n"
+    message += "📧 <i>Full details in your email</i>"
+
     # 메시지 길이 제한 (4096자)
     if len(message) > 4000:
-        message = message[:3900] + "\\.\\.\\.\n\n_\\(Full report in email\\)_"
-    
+        message = message[:3900] + "...\n\n<i>(Full report in email)</i>"
+
     # 전송
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",  # Markdown 대신 HTML 사용 (더 안정적)
         "disable_web_page_preview": True  # 미리보기 비활성화로 깔끔하게
     }
-    
+
     try:
         print("📱 시각적으로 개선된 텔레그램 전송 중...")
         response = requests.post(url, json=payload, timeout=10)
