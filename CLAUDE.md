@@ -33,12 +33,44 @@ npm run preview          # Preview production build
 ```
 
 ### Backend Execution
+
+**Quick Setup with Virtual Environment** (Recommended):
 ```bash
-# Run the professional intelligence script
+# One-time setup (creates venv and installs dependencies)
+./setup_venv.sh
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Run the script
 python scripts/fetch_6g_professional.py
 
-# Install Python dependencies
+# Deactivate when done
+deactivate
+```
+
+**Manual Setup**:
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies from requirements.txt
+pip install -r requirements.txt
+
+# Run the script
+python scripts/fetch_6g_professional.py
+```
+
+**Without Virtual Environment** (Not recommended):
+```bash
+# Install Python dependencies globally
 pip install requests beautifulsoup4 lxml
+
+# Run the script
+python3 scripts/fetch_6g_professional.py
 ```
 
 ### GitHub Actions
