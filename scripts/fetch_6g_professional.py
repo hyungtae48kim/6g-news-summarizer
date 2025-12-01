@@ -1359,7 +1359,7 @@ def create_visual_html_email(summary_data):
 CSS 변수 없이 인라인 스타일 사용
 """
 
-def create_email_safe_html(summary_data):
+def create_email_safe_html(summary_data, hot_keyword=None):
     """이메일 클라이언트 호환 HTML 생성"""
     
     # 타입별 색상 정의
@@ -1442,7 +1442,27 @@ def create_email_safe_html(summary_data):
                                 </table>
                             </td>
                         </tr>
-                        
+    """
+
+    # Hot Keyword 섹션 추가 (stats 다음)
+    if hot_keyword:
+        html += f"""
+                        <!-- Hot Keyword 섹션 -->
+                        <tr>
+                            <td style="padding: 20px 30px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-bottom: 1px solid #e5e7eb;">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            <div style="font-size: 14px; color: #92400e; font-weight: 600; margin-bottom: 4px;">🔥 TODAY'S HOT KEYWORD</div>
+                                            <div style="font-size: 18px; font-weight: 700; color: #78350f;">{hot_keyword}</div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+        """
+
+    html += """
                         <!-- 컨텐츠 영역 -->
                         <tr>
                             <td style="padding: 30px; background-color: #f9fafb;">
@@ -1548,7 +1568,7 @@ def create_email_safe_html(summary_data):
     return html
 
 # 기존 fetch_6g_professional.py의 send_email 함수를 이것으로 교체
-def send_email(summary_data):
+def send_email(summary_data, hot_keyword=None):
     """시각적으로 개선된 이메일 전송"""
     gmail_user = os.environ.get('GMAIL_USER')
     gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
@@ -1568,7 +1588,7 @@ def send_email(summary_data):
     msg['To'] = recipient
 
     # 새로운 시각적 HTML 사용
-    html_body = create_email_safe_html(summary_data)
+    html_body = create_email_safe_html(summary_data, hot_keyword=hot_keyword)
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
@@ -1601,7 +1621,7 @@ def send_email(summary_data):
 - 읽기 쉬운 포맷
 """
 
-def send_visual_telegram(summary_data):
+def send_visual_telegram(summary_data, hot_keyword=None):
     """시각적으로 개선된 텔레그램 메시지 전송 (HTML 포맷)"""
 
     import requests
@@ -1622,76 +1642,115 @@ def send_visual_telegram(summary_data):
         groups[item_type].append(item)
 
     # HTML 포맷으로 메시지 작성 (Markdown보다 안정적)
-    message = "🔬 <b>6G Technology Intelligence Report</b>\n"
-    message += f"📅 <i>{html.escape(summary_data['generatedAt'])}</i>\n\n"
+    # 헤더와 통계는 항상 포함
+    header = "🔬 <b>6G Technology Intelligence Report</b>\n"
+    header += f"📅 <i>{html.escape(summary_data['generatedAt'])}</i>\n\n"
+    header += "📊 <b>Quick Summary</b>\n"
+    header += f"├─ 📚 Journals: {len(groups['Journal'])}\n"
+    header += f"├─ 📄 Papers: {len(groups['Paper'])}\n"
+    header += f"└─ 📰 News: {len(groups['News'])}\n\n"
 
-    # 통계 요약
-    message += "📊 <b>Quick Summary</b>\n"
-    message += f"├─ 📚 Journals: {len(groups['Journal'])}\n"
-    message += f"├─ 📄 Papers: {len(groups['Paper'])}\n"
-    message += f"└─ 📰 News: {len(groups['News'])}\n\n"
-    message += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    # Hot Keyword 섹션 추가 (Quick Summary 다음)
+    if hot_keyword:
+        header += f"🔥 <b>Today's Hot Keyword:</b> <code>{html.escape(hot_keyword)}</code>\n\n"
+
+    header += "━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    footer = "\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    footer += "🤖 <i>Automated Report for 6G Engineers</i>\n"
+    footer += "📧 <i>Full details in your email</i>"
+
+    # 텔레그램 메시지 길이 제한 (4096자)
+    MAX_LENGTH = 4096
+    SAFE_LENGTH = 3500  # footer와 여유 공간 확보
+
+    message = header
+    content_parts = []
 
     # Journal 섹션
     if groups['Journal']:
-        message += "📚 <b>ACADEMIC JOURNALS</b>\n\n"
+        section = "📚 <b>ACADEMIC JOURNALS</b>\n\n"
         for i, item in enumerate(groups['Journal'], 1):
             # 제목 (HTML 이스케이프)
             title = html.escape(item['title'][:80])
-            message += f"<b>{i}. {title}</b>\n\n"
+            item_text = f"<b>{i}. {title}</b>\n\n"
 
             # 요약 (짧게)
             summary = html.escape(item['summary'][:120])
-            message += f"📝 {summary}...\n\n"
+            item_text += f"📝 {summary}...\n\n"
 
             # 인사이트
             insight = html.escape(item['message'][:100])
-            message += f"💡 <i>{insight}</i>\n\n"
+            item_text += f"💡 <i>{insight}</i>\n\n"
 
             # 링크
             if item.get('url'):
-                message += f"🔗 <a href=\"{item['url']}\">Read Full Article</a>\n\n"
+                item_text += f"🔗 <a href=\"{item['url']}\">Read Full Article</a>\n\n"
 
-            message += "─────────────\n\n"
+            item_text += "─────────────\n\n"
+
+            # 길이 체크
+            if len(message + section + item_text + footer) < SAFE_LENGTH:
+                section += item_text
+            else:
+                break
+
+        content_parts.append(section)
 
     # Paper 섹션
     if groups['Paper']:
-        message += "📄 <b>RESEARCH PAPERS</b>\n\n"
+        section = "📄 <b>RESEARCH PAPERS</b>\n\n"
         for i, item in enumerate(groups['Paper'], 1):
             title = html.escape(item['title'][:80])
-            message += f"<b>{i}. {title}</b>\n\n"
+            item_text = f"<b>{i}. {title}</b>\n\n"
 
             summary = html.escape(item['summary'][:120])
-            message += f"📝 {summary}...\n\n"
+            item_text += f"📝 {summary}...\n\n"
 
             insight = html.escape(item['message'][:100])
-            message += f"💡 <i>{insight}</i>\n\n"
+            item_text += f"💡 <i>{insight}</i>\n\n"
 
             if item.get('url'):
-                message += f"🔗 <a href=\"{item['url']}\">Read Paper</a>\n\n"
+                item_text += f"🔗 <a href=\"{item['url']}\">Read Paper</a>\n\n"
 
-            message += "─────────────\n\n"
+            item_text += "─────────────\n\n"
+
+            # 길이 체크
+            current_content = ''.join(content_parts) + section + item_text
+            if len(message + current_content + footer) < SAFE_LENGTH:
+                section += item_text
+            else:
+                break
+
+        content_parts.append(section)
 
     # News 섹션 (최대 3개)
     if groups['News']:
-        message += "📰 <b>INDUSTRY NEWS</b>\n\n"
+        section = "📰 <b>INDUSTRY NEWS</b>\n\n"
+        news_count = 0
         for i, item in enumerate(groups['News'][:3], 1):
             title = html.escape(item['title'][:70])
-            message += f"<b>{i}. {title}</b>\n"
+            item_text = f"<b>{i}. {title}</b>\n"
 
             if item.get('url'):
-                message += f"🔗 <a href=\"{item['url']}\">Read More</a>\n\n"
+                item_text += f"🔗 <a href=\"{item['url']}\">Read More</a>\n\n"
 
-        if len(groups['News']) > 3:
-            message += f"<i>... and {len(groups['News']) - 3} more news items</i>\n\n"
+            # 길이 체크
+            current_content = ''.join(content_parts) + section + item_text
+            if len(message + current_content + footer) < SAFE_LENGTH:
+                section += item_text
+                news_count += 1
+            else:
+                break
 
-    message += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    message += "🤖 <i>Automated Report for 6G Engineers</i>\n"
-    message += "📧 <i>Full details in your email</i>"
+        if len(groups['News']) > news_count:
+            section += f"<i>... and {len(groups['News']) - news_count} more news items</i>\n\n"
 
-    # 메시지 길이 제한 (4096자)
-    if len(message) > 4000:
-        message = message[:3900] + "...\n\n<i>(Full report in email)</i>"
+        content_parts.append(section)
+
+    # 최종 메시지 조립
+    message += ''.join(content_parts)
+    message += footer
 
     # 전송
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -1847,10 +1906,10 @@ def main():
         save_to_file(summary_data)
 
         # Step 6: 이메일 전송
-        send_email(summary_data)
+        send_email(summary_data, hot_keyword=hot_keyword)
 
         # Step 7: 텔레그램 전송
-        send_visual_telegram(summary_data)
+        send_visual_telegram(summary_data, hot_keyword=hot_keyword)
 
         print("\n" + "="*70)
         print("✅ 모든 작업 완료!")
