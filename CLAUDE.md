@@ -8,15 +8,16 @@ AI-powered 6G/RAN technology intelligence system with dynamic keyword extraction
 
 **Workflow**:
 1. **Hot Keyword Extraction**: Gemini AI analyzes current trends to generate daily-focused search keywords
-2. **Data Collection**: Aggregates 40 items (10 from each source) using the hot keyword
+2. **Data Collection**: Aggregates 30 items (10 from each source) using the hot keyword
 3. **Intelligent Selection**: AI selects top 10 items most relevant for RAN SW developers
 4. **Deep Analysis**: Provides RAN-focused technical summaries and implementation insights
 
 **Data Sources** (10 items each):
 - IEEE Xplore journals
 - arXiv papers
-- Google Scholar papers
 - Google News articles
+
+**Note**: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA blocking)
 
 **Components**:
 - **Frontend**: React SPA for real-time news search with Claude API web search integration
@@ -110,15 +111,15 @@ python3 scripts/fetch_6g_professional.py
    - Returns focused 3-5 word search query
    - Fallback: "6G wireless communications"
 
-2. **Data Collection** (40 items total):
+2. **Data Collection** (30 items total):
    - IEEE Xplore API: 10 journals (requires `IEEE_API_KEY`)
    - arXiv API: 10 papers
-   - Google Scholar scraping: 10 papers
    - Google News RSS: 10 news articles
    - All sources use the extracted hot keyword
+   - **Note**: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA)
 
 3. **Intelligent Selection** (`select_top_items_for_ran_engineers()`):
-   - Gemini analyzes all 40 items with RAN SW Engineer criteria
+   - Gemini analyzes all 30 items with RAN SW Engineer criteria
    - Selection criteria:
      - Practical applicability to RAN software development
      - Novel algorithms/architectures for RAN
@@ -245,7 +246,7 @@ python3 scripts/fetch_6g_professional.py
   - Falls back to `create_summary_without_ai()` with raw descriptions
 
 ### Web Scraping Challenges
-- Google Scholar scraping may be unstable (relies on HTML structure)
+- **Google Scholar removed**: Bot detection (HTTP 429 + CAPTCHA) prevents reliable scraping
 - All HTTP requests use `User-Agent` header to avoid bot detection
 - BeautifulSoup with `lxml` parser for RSS, `html.parser` for HTML
 
@@ -291,7 +292,7 @@ python scripts/fetch_6g_professional.py
 
 1. **Dynamic Content Selection**: Unlike static keyword systems, this uses AI to:
    - Extract daily-relevant search keywords
-   - Collect 40 items instead of 15
+   - Collect 30 items from reliable sources (IEEE, arXiv, Google News)
    - Intelligently select top 10 for RAN SW engineers
    - Result: Higher quality, more relevant content daily
 

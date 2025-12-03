@@ -2,9 +2,11 @@
 """
 6G 기술 전문 검색 및 요약 시스템 (RAN Network Professor & RAN SW Engineer Persona)
 - 매일 동적으로 6G hot keywords 추출
-- 각 소스에서 10개씩 총 40개 아이템 수집
+- 각 소스에서 10개씩 총 30개 아이템 수집 (IEEE, arXiv, Google News)
 - RAN SW 개발자 관점에서 10개 선별
 - 선별된 아이템에 대해 심층 요약
+
+Note: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA)
 """
 
 import os
@@ -1845,7 +1847,8 @@ def main():
         hot_keyword = extract_hot_keywords()
         print(f"🎯 오늘의 검색 키워드: '{hot_keyword}'")
 
-        # Step 2: 데이터 수집 (각 소스에서 10개씩, 총 40개)
+        # Step 2: 데이터 수집 (각 소스에서 10개씩, 총 30개)
+        # Note: Google Scholar removed due to bot detection (429 + CAPTCHA)
         print("\n" + "="*70)
         print("STEP 2: 데이터 수집 (각 소스 10개씩)")
         print("="*70)
@@ -1859,9 +1862,9 @@ def main():
         papers_arxiv = search_arxiv(hot_keyword, num_results=10)
         all_items.extend(papers_arxiv)
 
-        # Google Scholar Papers (10개)
-        papers_scholar = search_google_scholar(hot_keyword, num_results=10)
-        all_items.extend(papers_scholar)
+        # Google Scholar Papers - DISABLED (bot detection issues)
+        # papers_scholar = search_google_scholar(hot_keyword, num_results=10)
+        # all_items.extend(papers_scholar)
 
         # Google News (10개)
         news = search_google_news(hot_keyword, num_results=10)
@@ -1870,7 +1873,6 @@ def main():
         print(f"\n✅ 총 {len(all_items)}개 자료 수집 완료")
         print(f"  📚 IEEE Journals: {len(journals)}개")
         print(f"  📄 arXiv Papers: {len(papers_arxiv)}개")
-        print(f"  📝 Scholar Papers: {len(papers_scholar)}개")
         print(f"  📰 Google News: {len(news)}개")
 
         if not all_items:
