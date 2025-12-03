@@ -77,6 +77,7 @@ Consider these areas:
 - Terahertz communications
 - Reconfigurable intelligent surfaces (RIS)
 - Digital twin for networks
+- The latest 6G technology trends
 
 Return ONLY the search query phrase in English, nothing else. No explanation, no quotes.
 
@@ -1624,7 +1625,7 @@ def send_email(summary_data, hot_keyword=None):
 """
 
 def send_visual_telegram(summary_data, hot_keyword=None):
-    """시각적으로 개선된 텔레그램 메시지 전송 (HTML 포맷)"""
+    """간소화된 텔레그램 메시지 전송 (title, summary, url 포맷)"""
 
     import requests
     import os
@@ -1643,8 +1644,8 @@ def send_visual_telegram(summary_data, hot_keyword=None):
         item_type = item.get('type', 'News')
         groups[item_type].append(item)
 
-    # HTML 포맷으로 메시지 작성 (Markdown보다 안정적)
-    # 헤더와 통계는 항상 포함
+    # HTML 포맷으로 메시지 작성
+    # 헤더와 통계
     header = "🔬 <b>6G Technology Intelligence Report</b>\n"
     header += f"📅 <i>{html.escape(summary_data['generatedAt'])}</i>\n\n"
     header += "📊 <b>Quick Summary</b>\n"
@@ -1652,7 +1653,7 @@ def send_visual_telegram(summary_data, hot_keyword=None):
     header += f"├─ 📄 Papers: {len(groups['Paper'])}\n"
     header += f"└─ 📰 News: {len(groups['News'])}\n\n"
 
-    # Hot Keyword 섹션 추가 (Quick Summary 다음)
+    # Hot Keyword 섹션
     if hot_keyword:
         header += f"🔥 <b>Today's Hot Keyword:</b> <code>{html.escape(hot_keyword)}</code>\n\n"
 
@@ -1663,31 +1664,26 @@ def send_visual_telegram(summary_data, hot_keyword=None):
     footer += "📧 <i>Full details in your email</i>"
 
     # 텔레그램 메시지 길이 제한 (4096자)
-    MAX_LENGTH = 4096
     SAFE_LENGTH = 3500  # footer와 여유 공간 확보
 
     message = header
     content_parts = []
 
-    # Journal 섹션
+    # Journal 섹션 (간소화된 포맷: title, summary, url)
     if groups['Journal']:
         section = "📚 <b>ACADEMIC JOURNALS</b>\n\n"
         for i, item in enumerate(groups['Journal'], 1):
-            # 제목 (HTML 이스케이프)
-            title = html.escape(item['title'][:80])
+            # Title
+            title = html.escape(item['title'][:100])
             item_text = f"<b>{i}. {title}</b>\n\n"
 
-            # 요약 (짧게)
-            summary = html.escape(item['summary'][:120])
-            item_text += f"📝 {summary}...\n\n"
+            # Summary
+            summary = html.escape(item['summary'][:200])
+            item_text += f"{summary}...\n\n"
 
-            # 인사이트
-            insight = html.escape(item['message'][:100])
-            item_text += f"💡 <i>{insight}</i>\n\n"
-
-            # 링크
+            # URL
             if item.get('url'):
-                item_text += f"🔗 <a href=\"{item['url']}\">Read Full Article</a>\n\n"
+                item_text += f"🔗 <a href=\"{item['url']}\">Read Article</a>\n\n"
 
             item_text += "─────────────\n\n"
 
@@ -1699,19 +1695,19 @@ def send_visual_telegram(summary_data, hot_keyword=None):
 
         content_parts.append(section)
 
-    # Paper 섹션
+    # Paper 섹션 (간소화된 포맷: title, summary, url)
     if groups['Paper']:
         section = "📄 <b>RESEARCH PAPERS</b>\n\n"
         for i, item in enumerate(groups['Paper'], 1):
-            title = html.escape(item['title'][:80])
+            # Title
+            title = html.escape(item['title'][:100])
             item_text = f"<b>{i}. {title}</b>\n\n"
 
-            summary = html.escape(item['summary'][:120])
-            item_text += f"📝 {summary}...\n\n"
+            # Summary
+            summary = html.escape(item['summary'][:200])
+            item_text += f"{summary}...\n\n"
 
-            insight = html.escape(item['message'][:100])
-            item_text += f"💡 <i>{insight}</i>\n\n"
-
+            # URL
             if item.get('url'):
                 item_text += f"🔗 <a href=\"{item['url']}\">Read Paper</a>\n\n"
 
@@ -1726,16 +1722,24 @@ def send_visual_telegram(summary_data, hot_keyword=None):
 
         content_parts.append(section)
 
-    # News 섹션 (최대 3개)
+    # News 섹션 (간소화된 포맷: title, summary, url)
     if groups['News']:
         section = "📰 <b>INDUSTRY NEWS</b>\n\n"
         news_count = 0
-        for i, item in enumerate(groups['News'][:3], 1):
-            title = html.escape(item['title'][:70])
-            item_text = f"<b>{i}. {title}</b>\n"
+        for i, item in enumerate(groups['News'], 1):
+            # Title
+            title = html.escape(item['title'][:100])
+            item_text = f"<b>{i}. {title}</b>\n\n"
 
+            # Summary
+            summary = html.escape(item['summary'][:150])
+            item_text += f"{summary}...\n\n"
+
+            # URL
             if item.get('url'):
-                item_text += f"🔗 <a href=\"{item['url']}\">Read More</a>\n\n"
+                item_text += f"🔗 <a href=\"{item['url']}\">Read News</a>\n\n"
+
+            item_text += "─────────────\n\n"
 
             # 길이 체크
             current_content = ''.join(content_parts) + section + item_text
@@ -1759,12 +1763,12 @@ def send_visual_telegram(summary_data, hot_keyword=None):
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "HTML",  # Markdown 대신 HTML 사용 (더 안정적)
-        "disable_web_page_preview": True  # 미리보기 비활성화로 깔끔하게
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
     }
 
     try:
-        print("📱 시각적으로 개선된 텔레그램 전송 중...")
+        print("📱 간소화된 텔레그램 메시지 전송 중...")
         response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
         print("✅ 텔레그램 전송 완료")
