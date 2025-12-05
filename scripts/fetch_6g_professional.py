@@ -21,6 +21,95 @@ from bs4 import BeautifulSoup
 
 # ==================== 유틸리티 함수 ====================
 
+def validate_and_clean_url(url):
+    """URL 유효성 검증 및 정제
+
+    Args:
+        url: 검증할 URL 문자열
+
+    Returns:
+        str: 유효한 URL 또는 빈 문자열
+    """
+    if not url:
+        return ''
+
+    # URL 기본 정제
+    url = url.strip()
+
+    # Google News 리다이렉트 URL 처리
+    if 'news.google.com/rss/articles/' in url:
+        try:
+            # 실제 URL로 리다이렉트 시도 (GET 요청으로 변경)
+            response = requests.get(
+                url,
+                allow_redirects=True,
+                timeout=10,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            )
+
+            # 성공적으로 리다이렉트되었고 유효한 응답인 경우
+            if response.status_code == 200:
+                final_url = response.url
+
+                # 최종 URL이 여전히 Google News 도메인인 경우 검증
+                if 'news.google.com' in final_url:
+                    # /articles/는 리다이렉트 URL 자체이므로 무효 처리
+                    # 유효한 URL은 /read/로 시작하는 실제 기사 페이지여야 함
+                    if '/articles/' in final_url:
+                        print(f"⚠️ Google News 리다이렉트 URL이 실제 기사로 변환되지 않음: {final_url[:100]}...")
+                        return ''
+
+                    # Google News의 /read/ 페이지가 아니면 무효
+                    if '/read/' not in final_url:
+                        print(f"⚠️ Google News URL이 유효한 기사로 리다이렉트되지 않음: {final_url[:100]}...")
+                        return ''
+
+                    # Google 에러 페이지로 리다이렉트된 경우 무효 처리
+                    if 'support.google.com' in final_url or 'accounts.google.com' in final_url:
+                        print(f"⚠️ Google News URL이 에러 페이지로 리다이렉트됨: {final_url[:100]}...")
+                        return ''
+
+                # 정상적인 외부 사이트로 리다이렉트된 경우 반환
+                return final_url
+
+            # 리다이렉트 실패 시 빈 문자열 반환
+            print(f"⚠️ Google News URL 리다이렉트 실패 (HTTP {response.status_code}): {url[:100]}...")
+            return ''
+
+        except requests.exceptions.Timeout:
+            print(f"⚠️ URL 검증 타임아웃 (10초 초과): {url[:100]}...")
+            return ''
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ URL 검증 실패 (네트워크 오류): {str(e)[:50]}")
+            return ''
+        except Exception as e:
+            print(f"⚠️ URL 검증 실패: {str(e)[:50]}")
+            return ''
+
+    # 일반 URL 유효성 검증
+    try:
+        # URL 형식 기본 검증
+        if not url.startswith(('http://', 'https://')):
+            return ''
+
+        # 기본 URL 구조 검증 (정규식)
+        url_pattern = re.compile(
+            r'^https?://'  # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+            r'localhost|'  # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+            r'(?::\d+)?'  # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+        if not url_pattern.match(url):
+            return ''
+
+        return url
+
+    except Exception as e:
+        print(f"⚠️ URL 검증 오류: {str(e)[:50]}")
+        return ''
+
 def clean_json_string(text):
     """JSON 문자열에서 문제가 될 수 있는 특수문자 정제"""
     # 백슬래시와 따옴표 문제 해결
@@ -327,17 +416,14 @@ def search_google_news(query, num_results=5):
         for item in items:
             # Google News RSS uses redirect URLs - extract the actual URL
             redirect_url = item.link.text if item.link else ''
-            actual_url = redirect_url
 
-            # Try to resolve the redirect to get the actual article URL
-            if redirect_url:
-                try:
-                    # Follow redirects to get the final URL
-                    head_response = requests.head(redirect_url, allow_redirects=True, timeout=5)
-                    actual_url = head_response.url
-                except:
-                    # If redirect fails, keep the original URL
-                    actual_url = redirect_url
+            # Validate and clean the URL
+            actual_url = validate_and_clean_url(redirect_url)
+
+            # Skip items with invalid URLs
+            if not actual_url:
+                print(f"⚠️ 유효하지 않은 URL 건너뛰기: {item.title.text if item.title else 'No title'}...")
+                continue
 
             results.append({
                 'title': item.title.text if item.title else '',
@@ -1502,27 +1588,35 @@ def create_email_safe_html(summary_data, hot_keyword=None):
         
         # 각 카드
         for item in items:
+            # URL 유효성 재검증 (이메일 생성 시점에서 추가 검증)
+            item_url = validate_and_clean_url(item.get('url', ''))
+
+            # URL이 유효하지 않으면 건너뛰기
+            if not item_url:
+                print(f"⚠️ 이메일 생성 중 유효하지 않은 URL 건너뛰기: {item.get('title', 'No title')[:50]}...")
+                continue
+
             html += f"""
                                 <!-- 카드 시작 -->
                                 <table width="100%" cellpadding="0" cellspacing="0" style="background: white; border-radius: 12px; margin-bottom: 20px; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0,0,0,0.07); border-left: 5px solid {color_config['primary']};">
                                     <tr>
                                         <td style="padding: 24px;">
-                                            
+
                                             <!-- 타입 배지 -->
                                             <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 12px; background: {color_config['bg']}; color: {color_config['primary']};">
                                                 {color_config['icon']} {color_config['label']}
                                             </div>
-                                            
+
                                             <!-- 제목 -->
                                             <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #1f2937; line-height: 1.4;">
-                                                <a href="{item['url']}" target="_blank" style="color: #1f2937; text-decoration: none;">{item['title']}</a>
+                                                <a href="{item_url}" target="_blank" style="color: #1f2937; text-decoration: none;">{item['title']}</a>
                                             </h2>
-                                            
+
                                             <!-- 요약 -->
                                             <div style="color: #4b5563; font-size: 15px; line-height: 1.7; margin-bottom: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 3px solid {color_config['primary']};">
                                                 {item['summary']}
                                             </div>
-                                            
+
                                             <!-- 인사이트 -->
                                             <div style="background: {color_config['bg']}; border-radius: 8px; padding: 16px; margin-top: 16px; border-left: 3px solid {color_config['primary']};">
                                                 <div style="font-weight: 700; color: {color_config['primary']}; font-size: 14px; margin-bottom: 8px;">
@@ -1532,14 +1626,14 @@ def create_email_safe_html(summary_data, hot_keyword=None):
                                                     {item['message']}
                                                 </div>
                                             </div>
-                                            
+
                                             <!-- 링크 버튼 -->
                                             <div style="margin-top: 16px;">
-                                                <a href="{item['url']}" target="_blank" style="display: inline-block; padding: 10px 20px; background: {color_config['primary']}; color: white; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">
+                                                <a href="{item_url}" target="_blank" style="display: inline-block; padding: 10px 20px; background: {color_config['primary']}; color: white; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">
                                                     Read Full Article →
                                                 </a>
                                             </div>
-                                            
+
                                         </td>
                                     </tr>
                                 </table>
