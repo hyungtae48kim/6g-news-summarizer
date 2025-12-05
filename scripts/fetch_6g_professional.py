@@ -37,54 +37,23 @@ def validate_and_clean_url(url):
     url = url.strip()
 
     # Google News 리다이렉트 URL 처리
+    # Note: Google News RSS URLs는 클라이언트 사이드(브라우저)에서만 리다이렉트됨
+    # 서버 사이드에서는 리다이렉트되지 않으므로 원본 URL을 사용
     if 'news.google.com/rss/articles/' in url:
-        try:
-            # 실제 URL로 리다이렉트 시도 (GET 요청으로 변경)
-            response = requests.get(
-                url,
-                allow_redirects=True,
-                timeout=10,
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            )
-
-            # 성공적으로 리다이렉트되었고 유효한 응답인 경우
-            if response.status_code == 200:
-                final_url = response.url
-
-                # 최종 URL이 여전히 Google News 도메인인 경우 검증
-                if 'news.google.com' in final_url:
-                    # /articles/는 리다이렉트 URL 자체이므로 무효 처리
-                    # 유효한 URL은 /read/로 시작하는 실제 기사 페이지여야 함
-                    if '/articles/' in final_url:
-                        print(f"⚠️ Google News 리다이렉트 URL이 실제 기사로 변환되지 않음: {final_url[:100]}...")
-                        return ''
-
-                    # Google News의 /read/ 페이지가 아니면 무효
-                    if '/read/' not in final_url:
-                        print(f"⚠️ Google News URL이 유효한 기사로 리다이렉트되지 않음: {final_url[:100]}...")
-                        return ''
-
-                    # Google 에러 페이지로 리다이렉트된 경우 무효 처리
-                    if 'support.google.com' in final_url or 'accounts.google.com' in final_url:
-                        print(f"⚠️ Google News URL이 에러 페이지로 리다이렉트됨: {final_url[:100]}...")
-                        return ''
-
-                # 정상적인 외부 사이트로 리다이렉트된 경우 반환
-                return final_url
-
-            # 리다이렉트 실패 시 빈 문자열 반환
-            print(f"⚠️ Google News URL 리다이렉트 실패 (HTTP {response.status_code}): {url[:100]}...")
+        # 기본 URL 구조 검증만 수행
+        # URL 형식이 올바른지 확인 (최소 길이, 필수 파라미터 등)
+        if len(url) < 50:  # Google News article URLs are typically long
+            print(f"⚠️ Google News URL이 너무 짧음 (유효하지 않은 형식): {url}")
             return ''
 
-        except requests.exceptions.Timeout:
-            print(f"⚠️ URL 검증 타임아웃 (10초 초과): {url[:100]}...")
+        # 필수 구조 확인: /rss/articles/로 시작하고 base64 인코딩된 ID 포함
+        if not url.startswith('https://news.google.com/rss/articles/'):
+            print(f"⚠️ Google News URL 형식이 올바르지 않음: {url[:100]}...")
             return ''
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ URL 검증 실패 (네트워크 오류): {str(e)[:50]}")
-            return ''
-        except Exception as e:
-            print(f"⚠️ URL 검증 실패: {str(e)[:50]}")
-            return ''
+
+        # URL이 정상적인 형식이면 그대로 반환
+        # (브라우저에서 클릭하면 JavaScript로 실제 기사로 리다이렉트됨)
+        return url
 
     # 일반 URL 유효성 검증
     try:
@@ -396,9 +365,79 @@ def search_ieee(query, num_results=5, api_key=None):
         print(f"❌ IEEE 검색 오류: {e}")
         return []
 
+def search_the_verge(query, num_results=5):
+    """The Verge Atom 피드 검색 (News)"""
+
+    print(f"📰 The Verge 검색 중: {query}")
+
+    # The Verge uses Atom feed (not RSS)
+    url = "https://www.theverge.com/rss/index.xml"
+
+    try:
+        response = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }, timeout=10)
+        response.raise_for_status()
+
+        # Parse as XML (Atom format)
+        soup = BeautifulSoup(response.content, 'xml')
+        entries = soup.find_all('entry')
+
+        # Filter by query keywords and limit results
+        results = []
+        query_lower = query.lower()
+
+        for entry in entries:
+            if len(results) >= num_results:
+                break
+
+            title = entry.find('title').text if entry.find('title') else ''
+            summary_elem = entry.find('summary')
+            content_elem = entry.find('content')
+
+            # Get description from summary or content
+            description = ''
+            if summary_elem:
+                description = summary_elem.text
+            elif content_elem:
+                # Content might have HTML, extract text
+                description = BeautifulSoup(content_elem.text, 'html.parser').get_text()
+
+            # Get URL from link
+            link_elem = entry.find('link', {'rel': 'alternate'})
+            if not link_elem:
+                link_elem = entry.find('link')
+            url = link_elem.get('href') if link_elem else ''
+
+            # Simple keyword filtering (check if any query word is in title or description)
+            query_words = query_lower.split()
+            text_to_search = (title + ' ' + description).lower()
+
+            # If query matches or we don't have enough results yet
+            if any(word in text_to_search for word in query_words) or len(results) < num_results:
+                # Validate URL
+                validated_url = validate_and_clean_url(url)
+                if not validated_url:
+                    continue
+
+                results.append({
+                    'title': title,
+                    'description': description[:500] if description else 'No description',
+                    'url': validated_url,
+                    'pub_date': entry.find('published').text if entry.find('published') else '',
+                    'type': 'News'
+                })
+
+        print(f"✅ {len(results)}개 뉴스 발견")
+        return results
+
+    except Exception as e:
+        print(f"❌ The Verge 검색 오류: {e}")
+        return []
+
 def search_google_news(query, num_results=5):
     """Google 뉴스 검색 (News)"""
-    
+
     print(f"📰 구글 뉴스 검색 중: {query}")
     
     url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
@@ -606,7 +645,9 @@ def summarize_with_gemini(items):
         # 특수문자 완전 제거 (JSON 파싱 오류 방지)
         title = item['title'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()[:200]
         description = item['description'].replace('"', '').replace("'", '').replace('\\', '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()[:300]
-        url = item['url'].replace('"', '').replace('\\', '').strip()
+        # URL 정제: 실제 줄바꿈 문자와 리터럴 \n 시퀀스 모두 제거
+        url = item['url'].replace('\n', '').replace('\r', '').replace('\t', '').replace(' ', '')
+        url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '').strip()
 
         items_context += f"\n{i}. [{item['type']}] {title}\n"
         items_context += f"Description: {description}\n"
@@ -1964,14 +2005,19 @@ def main():
         # papers_scholar = search_google_scholar(hot_keyword, num_results=10)
         # all_items.extend(papers_scholar)
 
-        # Google News (10개)
-        news = search_google_news(hot_keyword, num_results=10)
-        all_items.extend(news)
+        # Google News (5개)
+        news_google = search_google_news(hot_keyword, num_results=5)
+        all_items.extend(news_google)
+
+        # The Verge (5개)
+        news_verge = search_the_verge(hot_keyword, num_results=5)
+        all_items.extend(news_verge)
 
         print(f"\n✅ 총 {len(all_items)}개 자료 수집 완료")
         print(f"  📚 IEEE Journals: {len(journals)}개")
         print(f"  📄 arXiv Papers: {len(papers_arxiv)}개")
-        print(f"  📰 Google News: {len(news)}개")
+        print(f"  📰 Google News: {len(news_google)}개")
+        print(f"  📰 The Verge: {len(news_verge)}개")
 
         if not all_items:
             print("❌ 수집된 자료가 없습니다.")

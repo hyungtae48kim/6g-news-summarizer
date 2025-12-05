@@ -8,14 +8,17 @@ AI-powered 6G/RAN technology intelligence system with dynamic keyword extraction
 
 **Workflow**:
 1. **Hot Keyword Extraction**: Gemini AI analyzes current trends to generate daily-focused search keywords
-2. **Data Collection**: Aggregates 30 items (10 from each source) using the hot keyword
+2. **Data Collection**: Aggregates 30 items using the hot keyword from multiple sources
 3. **Intelligent Selection**: AI selects top 10 items most relevant for RAN SW developers
 4. **Deep Analysis**: Provides RAN-focused technical summaries and implementation insights
 
-**Data Sources** (10 items each):
-- IEEE Xplore journals
-- arXiv papers
-- Google News articles
+**Data Sources**:
+- **IEEE Xplore**: 10 journal articles (academic research)
+- **arXiv**: 10 research papers (preprints)
+- **Google News**: 5 news articles (Korean language)
+- **The Verge**: 5 tech news articles (English, Atom feed)
+
+**Total**: 30 items collected → Top 10 selected by AI
 
 **Note**: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA blocking)
 
@@ -112,9 +115,10 @@ python3 scripts/fetch_6g_professional.py
    - Fallback: "6G wireless communications"
 
 2. **Data Collection** (30 items total):
-   - IEEE Xplore API: 10 journals (requires `IEEE_API_KEY`)
-   - arXiv API: 10 papers
-   - Google News RSS: 10 news articles
+   - **IEEE Xplore API**: 10 journals (requires `IEEE_API_KEY`)
+   - **arXiv API**: 10 research papers
+   - **Google News RSS**: 5 news articles (Korean)
+   - **The Verge Atom Feed**: 5 tech news articles (English)
    - All sources use the extracted hot keyword
    - **Note**: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA)
 
