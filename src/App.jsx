@@ -19,10 +19,17 @@ export default function SixGNewsSummarizer() {
       // 단일 API 호출로 검색과 요약을 한번에 처리
       await delay(500); // 약간의 지연
       
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다. .env 파일에 VITE_ANTHROPIC_API_KEY를 추가해주세요.');
+      }
+
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
