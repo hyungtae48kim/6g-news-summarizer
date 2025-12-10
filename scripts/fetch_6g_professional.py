@@ -36,28 +36,8 @@ def validate_and_clean_url(url):
     # URL 기본 정제
     url = url.strip()
 
-    # Google News 리다이렉트 URL 처리
-    # Note: Google News RSS URLs는 클라이언트 사이드(브라우저)에서만 리다이렉트됨
-    # 서버 사이드에서는 리다이렉트되지 않으므로 원본 URL을 사용
-    if 'news.google.com/rss/articles/' in url:
-        # 기본 URL 구조 검증만 수행
-        # URL 형식이 올바른지 확인 (최소 길이, 필수 파라미터 등)
-        if len(url) < 50:  # Google News article URLs are typically long
-            print(f"⚠️ Google News URL이 너무 짧음 (유효하지 않은 형식): {url}")
-            return ''
-
-        # 필수 구조 확인: /rss/articles/로 시작하고 base64 인코딩된 ID 포함
-        if not url.startswith('https://news.google.com/rss/articles/'):
-            print(f"⚠️ Google News URL 형식이 올바르지 않음: {url[:100]}...")
-            return ''
-
-        # URL이 정상적인 형식이면 그대로 반환
-        # (브라우저에서 클릭하면 JavaScript로 실제 기사로 리다이렉트됨)
-        return url
-
-    # 일반 URL 유효성 검증
+    # URL 형식 기본 검증
     try:
-        # URL 형식 기본 검증
         if not url.startswith(('http://', 'https://')):
             return ''
 
@@ -439,25 +419,31 @@ def search_google_news(query, num_results=5):
     """Google 뉴스 검색 (News)"""
 
     print(f"📰 구글 뉴스 검색 중: {query}")
-    
+
     url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
-    
+
     try:
         response = requests.get(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }, timeout=10)
         response.raise_for_status()
-        
+
         soup = BeautifulSoup(response.content, 'xml')
         items = soup.find_all('item', limit=num_results)
-        
+
         results = []
         for item in items:
-            # Google News RSS uses redirect URLs - extract the actual URL
-            redirect_url = item.link.text if item.link else ''
+            # Extract original URL from <source> tag instead of redirect URL
+            # Google News RSS structure: <source url="original_url">Source Name</source>
+            source_tag = item.find('source')
+            original_url = source_tag.get('url') if source_tag else None
+
+            # Fallback to link if source URL not available
+            if not original_url:
+                original_url = item.link.text if item.link else ''
 
             # Validate and clean the URL
-            actual_url = validate_and_clean_url(redirect_url)
+            actual_url = validate_and_clean_url(original_url)
 
             # Skip items with invalid URLs
             if not actual_url:
@@ -471,10 +457,10 @@ def search_google_news(query, num_results=5):
                 'pub_date': item.pubDate.text if item.pubDate else '',
                 'type': 'News'
             })
-        
+
         print(f"✅ {len(results)}개 뉴스 발견")
         return results
-        
+
     except Exception as e:
         print(f"❌ Google News 검색 오류: {e}")
         return []
