@@ -140,6 +140,11 @@ python3 scripts/fetch_6g_professional.py
      - AI/ML-based RAN optimization algorithms
      - Real-time performance requirements
      - Implementation considerations
+   - **URL Preservation** (`_preserve_original_urls()`):
+     - Automatically restores accurate article URLs from original items
+     - Matches summary items with original items by title comparison
+     - Fixes issue where Gemini returns generic domain URLs instead of specific article URLs
+     - Supports both exact and partial title matching for robust recovery
    - Fallback to raw descriptions if API fails
 
 **Output Format**:
@@ -254,6 +259,17 @@ python3 scripts/fetch_6g_professional.py
 - All HTTP requests use `User-Agent` header to avoid bot detection
 - BeautifulSoup with `lxml` parser for RSS, `html.parser` for HTML
 
+### URL Preservation Logic
+- **Problem**: Gemini AI sometimes returns generic domain URLs (e.g., `https://news.sktelecom.com`) instead of specific article URLs in summarization responses
+- **Solution**: `_preserve_original_urls()` helper function automatically restores accurate URLs
+- **How It Works**:
+  1. Creates a mapping of original item titles to their URLs
+  2. After Gemini summarization, matches each summary item with original items by title
+  3. Restores the original URL from the matched item
+  4. Supports both exact title matching and partial matching for robustness
+- **Impact**: Ensures all generated reports (email, Telegram, markdown) contain clickable links to actual articles
+- **Testing**: `test_url_preservation.py` verifies URL restoration logic with mock data
+
 ### Email HTML Compatibility
 - Uses table-based layout (not CSS Grid/Flexbox) for email client compatibility
 - Inline styles only (no external CSS or CSS variables)
@@ -290,6 +306,17 @@ export TELEGRAM_CHAT_ID="your_chat_id"
 
 # Run script
 python scripts/fetch_6g_professional.py
+```
+
+**Unit Testing**:
+```bash
+# Test URL preservation logic
+python test_url_preservation.py
+
+# Expected output:
+# ✅ All URL restoration tests pass
+# ✅ Exact title matching works correctly
+# ✅ Partial title matching handles edge cases
 ```
 
 ## Important Notes for Development
