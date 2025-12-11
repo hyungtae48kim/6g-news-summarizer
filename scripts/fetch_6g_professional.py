@@ -616,6 +616,37 @@ Example output format:
 
 # ==================== AI 요약 함수 ====================
 
+def _preserve_original_urls(summaries, original_items):
+    """
+    Gemini 응답에서 URL이 잘못되었을 경우 원본 아이템의 URL을 복원
+
+    Args:
+        summaries: Gemini가 반환한 요약 결과 리스트
+        original_items: 원본 아이템 리스트
+    """
+    # 원본 아이템을 title로 매핑
+    original_map = {}
+    for item in original_items:
+        # title을 정규화 (공백, 특수문자 제거)
+        normalized_title = item['title'].lower().strip()
+        original_map[normalized_title] = item['url']
+
+    # 각 요약 아이템의 URL을 원본에서 복원
+    for summary in summaries:
+        summary_title = summary.get('title', '').lower().strip()
+
+        # 정확히 일치하는 title 찾기
+        if summary_title in original_map:
+            summary['url'] = original_map[summary_title]
+            continue
+
+        # 부분 일치 시도 (title이 일부만 포함된 경우)
+        for orig_title, orig_url in original_map.items():
+            # 양방향 부분 일치 확인
+            if (summary_title in orig_title or orig_title in summary_title) and len(summary_title) > 20:
+                summary['url'] = orig_url
+                break
+
 def summarize_with_gemini(items):
     """Gemini AI로 6G 엔지니어 관점 요약"""
     
@@ -742,12 +773,16 @@ RAN SW 개발 관점에서 다음을 중점적으로 분석하세요:
                             "summaries": results,
                             "generatedAt": datetime.now().strftime('%Y-%m-%d')
                         }
+                        # URL 보존: 원본 아이템의 URL을 복원
+                        _preserve_original_urls(normalized_results['summaries'], items)
                         print(f"✅ {len(normalized_results['summaries'])}개 요약 완료")
                         return normalized_results
                     elif isinstance(results, dict):
                         if 'summaries' not in results:
                             print(f"⚠️ 'summaries' 키 없음. 응답 키: {list(results.keys())}")
                             return create_summary_without_ai(items)
+                        # URL 보존: 원본 아이템의 URL을 복원
+                        _preserve_original_urls(results['summaries'], items)
                         print(f"✅ {len(results['summaries'])}개 요약 완료")
                         return results
                     else:
