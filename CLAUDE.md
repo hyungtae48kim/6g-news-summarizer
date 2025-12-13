@@ -270,6 +270,17 @@ python3 scripts/fetch_6g_professional.py
 - **Impact**: Ensures all generated reports (email, Telegram, markdown) contain clickable links to actual articles
 - **Testing**: `test_url_preservation.py` verifies URL restoration logic with mock data
 
+### Google News URL Handling
+- **Issue**: Google News RSS does not provide direct article URLs
+  - `<source url="...">` tag contains only homepage URLs (e.g., `https://news.nate.com`)
+  - `<link>` tag contains Google redirect URLs (e.g., `https://news.google.com/rss/articles/...`)
+- **Solution**: Use Google redirect URLs from `<link>` tag
+  - These URLs redirect to actual articles when clicked in browser/email/Telegram
+  - More reliable than homepage URLs which don't link to specific articles
+- **Implementation**: `search_google_news()` extracts URLs from `<link>` tag instead of `<source url>`
+- **User Experience**: Links appear as `news.google.com/rss/articles/...` but redirect to actual articles on click
+- **Testing**: `test_news_url_validation.py` and `test_fixed_google_news.py` verify URL extraction
+
 ### Email HTML Compatibility
 - Uses table-based layout (not CSS Grid/Flexbox) for email client compatibility
 - Inline styles only (no external CSS or CSS variables)

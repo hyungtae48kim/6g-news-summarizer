@@ -433,17 +433,14 @@ def search_google_news(query, num_results=5):
 
         results = []
         for item in items:
-            # Extract original URL from <source> tag instead of redirect URL
-            # Google News RSS structure: <source url="original_url">Source Name</source>
-            source_tag = item.find('source')
-            original_url = source_tag.get('url') if source_tag else None
-
-            # Fallback to link if source URL not available
-            if not original_url:
-                original_url = item.link.text if item.link else ''
+            # Use Google redirect URL from <link> tag
+            # Google News RSS provides redirect URLs that work in browsers
+            # Note: <source url> only contains homepage URLs, not actual article URLs
+            # The redirect URL (news.google.com/rss/articles/...) redirects to the actual article when clicked
+            google_redirect_url = item.link.text if item.link else ''
 
             # Validate and clean the URL
-            actual_url = validate_and_clean_url(original_url)
+            actual_url = validate_and_clean_url(google_redirect_url)
 
             # Skip items with invalid URLs
             if not actual_url:
