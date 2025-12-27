@@ -345,10 +345,16 @@ def search_ieee(query, num_results=5, api_key=None):
         print(f"❌ IEEE 검색 오류: {e}")
         return []
 
-def search_the_verge(query, num_results=5):
-    """The Verge Atom 피드 검색 (News)"""
+def search_the_verge(query, num_results=5, days=7):
+    """The Verge Atom 피드 검색 (News) - 최근 N일 이내 기사만 검색
 
-    print(f"📰 The Verge 검색 중: {query}")
+    Args:
+        query: 검색 키워드
+        num_results: 반환할 최대 결과 수
+        days: 검색할 기간 (기본값: 7일)
+    """
+
+    print(f"📰 The Verge 검색 중 (최근 {days}일): {query}")
 
     # The Verge uses Atom feed (not RSS)
     url = "https://www.theverge.com/rss/index.xml"
@@ -363,6 +369,10 @@ def search_the_verge(query, num_results=5):
         soup = BeautifulSoup(response.content, 'xml')
         entries = soup.find_all('entry')
 
+        # 날짜 필터링을 위한 현재 시간
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=days)
+
         # Filter by query keywords and limit results
         results = []
         query_lower = query.lower()
@@ -370,6 +380,22 @@ def search_the_verge(query, num_results=5):
         for entry in entries:
             if len(results) >= num_results:
                 break
+
+            # 발행 날짜 확인
+            pub_date_str = entry.find('published').text if entry.find('published') else ''
+            if pub_date_str:
+                try:
+                    # ISO 8601 형식 파싱 (예: "2023-12-27T10:30:00Z")
+                    from dateutil import parser
+                    pub_date = parser.isoparse(pub_date_str)
+
+                    # 날짜 비교 (timezone-aware 비교)
+                    if pub_date.replace(tzinfo=None) < cutoff_date:
+                        continue  # 1주일 이전 기사는 건너뛰기
+                except Exception as e:
+                    print(f"⚠️ 날짜 파싱 오류: {pub_date_str[:30]}... - {e}")
+                    # 날짜 파싱 실패 시에는 포함 (보수적 접근)
+                    pass
 
             title = entry.find('title').text if entry.find('title') else ''
             summary_elem = entry.find('summary')
@@ -404,21 +430,27 @@ def search_the_verge(query, num_results=5):
                     'title': title,
                     'description': description[:500] if description else 'No description',
                     'url': validated_url,
-                    'pub_date': entry.find('published').text if entry.find('published') else '',
+                    'pub_date': pub_date_str,
                     'type': 'News'
                 })
 
-        print(f"✅ {len(results)}개 뉴스 발견")
+        print(f"✅ {len(results)}개 뉴스 발견 (최근 {days}일 이내)")
         return results
 
     except Exception as e:
         print(f"❌ The Verge 검색 오류: {e}")
         return []
 
-def search_google_news(query, num_results=5):
-    """Google 뉴스 검색 (News)"""
+def search_google_news(query, num_results=5, days=7):
+    """Google 뉴스 검색 (News) - 최근 N일 이내 기사만 검색
 
-    print(f"📰 구글 뉴스 검색 중: {query}")
+    Args:
+        query: 검색 키워드
+        num_results: 반환할 최대 결과 수
+        days: 검색할 기간 (기본값: 7일)
+    """
+
+    print(f"📰 구글 뉴스 검색 중 (최근 {days}일): {query}")
 
     url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
 
@@ -429,10 +461,32 @@ def search_google_news(query, num_results=5):
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, 'xml')
-        items = soup.find_all('item', limit=num_results)
+        items = soup.find_all('item')
+
+        # 날짜 필터링을 위한 현재 시간
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=days)
 
         results = []
         for item in items:
+            if len(results) >= num_results:
+                break
+
+            # 발행 날짜 확인
+            pub_date_str = item.pubDate.text if item.pubDate else ''
+            if pub_date_str:
+                try:
+                    # RFC 2822 형식 파싱 (예: "Wed, 27 Dec 2023 10:30:00 GMT")
+                    from email.utils import parsedate_to_datetime
+                    pub_date = parsedate_to_datetime(pub_date_str)
+
+                    # 날짜 비교 (timezone-aware 비교)
+                    if pub_date.replace(tzinfo=None) < cutoff_date:
+                        continue  # 1주일 이전 기사는 건너뛰기
+                except Exception as e:
+                    print(f"⚠️ 날짜 파싱 오류: {pub_date_str[:30]}... - {e}")
+                    continue
+
             # Use Google redirect URL from <link> tag
             # Google News RSS provides redirect URLs that work in browsers
             # Note: <source url> only contains homepage URLs, not actual article URLs
@@ -451,11 +505,11 @@ def search_google_news(query, num_results=5):
                 'title': item.title.text if item.title else '',
                 'description': item.description.text if item.description else '',
                 'url': actual_url,
-                'pub_date': item.pubDate.text if item.pubDate else '',
+                'pub_date': pub_date_str,
                 'type': 'News'
             })
 
-        print(f"✅ {len(results)}개 뉴스 발견")
+        print(f"✅ {len(results)}개 뉴스 발견 (최근 {days}일 이내)")
         return results
 
     except Exception as e:

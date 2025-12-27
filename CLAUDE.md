@@ -15,12 +15,14 @@ AI-powered 6G/RAN technology intelligence system with dynamic keyword extraction
 **Data Sources**:
 - **IEEE Xplore**: 10 journal articles (academic research)
 - **arXiv**: 10 research papers (preprints)
-- **Google News**: 5 news articles (Korean language)
-- **The Verge**: 5 tech news articles (English, Atom feed)
+- **Google News**: 5 news articles (Korean language, **최근 7일 이내**)
+- **The Verge**: 5 tech news articles (English, Atom feed, **최근 7일 이내**)
 
 **Total**: 30 items collected → Top 10 selected by AI
 
-**Note**: Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA blocking)
+**Note**:
+- Google Scholar removed due to bot detection (HTTP 429 + CAPTCHA blocking)
+- News sources (Google News, The Verge) filter articles to last 7 days only for freshness
 
 **Components**:
 - **Frontend**: React SPA for real-time news search with Claude API web search integration
@@ -258,6 +260,14 @@ python3 scripts/fetch_6g_professional.py
 - **Google Scholar removed**: Bot detection (HTTP 429 + CAPTCHA) prevents reliable scraping
 - All HTTP requests use `User-Agent` header to avoid bot detection
 - BeautifulSoup with `lxml` parser for RSS, `html.parser` for HTML
+
+### News Date Filtering
+- **Implementation**: News sources filter articles to last 7 days for freshness
+- **Google News**: Uses `email.utils.parsedate_to_datetime()` to parse RFC 2822 date format
+- **The Verge**: Uses `dateutil.parser.isoparse()` to parse ISO 8601 date format
+- **Behavior**: Articles older than 7 days are skipped during search
+- **Dependency**: Requires `python-dateutil>=2.8.2` package
+- **Testing**: `test_date_filtering.py` verifies date filtering works correctly
 
 ### URL Preservation Logic
 - **Problem**: Gemini AI sometimes returns generic domain URLs (e.g., `https://news.sktelecom.com`) instead of specific article URLs in summarization responses
