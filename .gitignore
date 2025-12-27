@@ -18,6 +18,14 @@ __pycache__/
 # Output files
 output/
 debug_gemini_response_*.txt
+debug_selection_*.txt
+
+# Test and debug files (keep in repo but exclude from tracking)
+test_*.py
+analyze_*.py
+*_SUMMARY.md
+*_FIX*.md
+check_env.sh
 
 # IDE
 .vscode/
